@@ -18,6 +18,8 @@ from bridge.repository import Repository
 from bridge.tools_link import LinkResult, UnlinkResult
 from bridge.tools_get import GetAssetResult, get_asset as _get_impl
 from bridge.tools_import import RegisterAssetResult, register_asset as _register_impl
+from bridge.audit import AuditReport, audit as _audit_impl
+from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
 from bridge.tools_search import (
     ListMemoryAssetsResult,
@@ -368,6 +370,30 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             )
         return _resolve_impl(provider=ctx.provider, repo=ctx.db,
                              config=ctx.config)
+
+    # ---- audit_assets (B-12): read-only drift & managed-copy audit ---------
+
+    @server.tool(
+        name="audit_assets",
+        description=(
+            "Read-only classification of locator drift against the provider "
+            "and of the managed directory against the DB (orphans, leftover "
+            "scratch, foreign files). Never writes, never deletes. apply=true "
+            "additionally performs ONLY frozen-graph status transitions — it "
+            "never rebinds provider_file_id and never removes links."
+        ),
+    )
+    def _audit_assets(apply: bool = False) -> AuditReport:
+        if ctx.db is None:  # pragma: no cover
+            return AuditReport(
+                ok=False,
+                error=error_result("storage_error")["error"],
+            )
+        if apply:
+            return _reconcile_impl(provider=ctx.provider, repo=ctx.db,
+                                   config=ctx.config, apply=True)
+        return _audit_impl(provider=ctx.provider, repo=ctx.db,
+                           config=ctx.config)
 
     return server
 
