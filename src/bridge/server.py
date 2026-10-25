@@ -136,10 +136,15 @@ def main() -> None:  # pragma: no cover - process entrypoint
         # stdout must stay protocol-clean: write to stderr only.
         sys.stderr.write("bridge: configuration error: " + str(exc) + "\n")
         raise SystemExit(2)
+    from bridge.client import LocalSearchClient
     from bridge.repository import Repository, open_repository
 
     conn = open_repository(config.data_dir)
+    provider = LocalSearchClient(config)
     ctx = BridgeContext(
-        config=config, provider=FakeProvider(), db=Repository(conn)
+        config=config, provider=provider, db=Repository(conn)
     )
-    create_server(ctx).run(transport="stdio")
+    try:
+        create_server(ctx).run(transport="stdio")
+    finally:
+        provider.close()
