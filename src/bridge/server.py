@@ -15,6 +15,7 @@ from bridge.config import BridgeConfig, load_config
 from bridge.errors import BridgeError, error_result
 from bridge.provider import FakeProvider, ProviderPort
 from bridge.repository import Repository
+from bridge.tools_link import LinkResult, UnlinkResult
 
 BRIDGE_VERSION = "0.0.0"
 
@@ -60,8 +61,7 @@ def _storage_health(ctx: BridgeContext) -> StorageHealth:
     PRAGMA user_version; without one (pure test hosts) report the known value."""
     if ctx.db is None:
         return StorageHealth(writable=True, schema_version=1)
-    version = ctx.db._conn.execute("PRAGMA user_version").fetchone()[0]
-    return StorageHealth(writable=True, schema_version=int(version))
+    return StorageHealth(writable=True, schema_version=ctx.db.schema_version())
 
 
 def bridge_health(ctx: BridgeContext) -> HealthResult:
@@ -119,6 +119,70 @@ def create_server(ctx: BridgeContext) -> MCPServer:
     )
     def _bridge_health() -> HealthResult:
         return bridge_health(ctx)
+
+    # ---- link tools (B-07) ----------------------------------------------------
+
+    from bridge.tools_link import link_asset as _link_impl
+    from bridge.tools_link import unlink_asset as _unlink_impl
+
+    @server.tool(
+        name="link_asset",
+        description=(
+            "Associate a local-search image file with one memory reference. "
+            "Verifies the file with the provider before writing; re-linking "
+            "the same file is idempotent. Returns a stable asset_id; never "
+            "returns image bytes. Scope arguments must repeat exactly "
+            "(exact match; a different scope sees nothing)."
+        ),
+    )
+    def _link_asset(
+        agent_id: str,
+        memory_ref: str,
+        provider_file_id: int,
+        project_id: str = "",
+        channel: str = "",
+        source_instance_id: str = "",
+    ) -> LinkResult:
+        if ctx.db is None:  # pragma: no cover - hosts always attach a repo
+            return LinkResult(ok=False, error=error_result("storage_error")["error"])
+        return _link_impl(
+            provider=ctx.provider,
+            repo=ctx.db,
+            provider_instance_id=ctx.config.provider_instance_id,
+            source_instance_id=source_instance_id,
+            agent_id=agent_id,
+            project_id=project_id,
+            channel=channel,
+            memory_ref=memory_ref,
+            provider_file_id=provider_file_id,
+        )
+
+    @server.tool(
+        name="unlink_asset",
+        description=(
+            "Remove one memory-to-asset association within the given scope. "
+            "Never deletes the local-search file or any CPersona memory."
+        ),
+    )
+    def _unlink_asset(
+        agent_id: str,
+        memory_ref: str,
+        asset_id: str,
+        project_id: str = "",
+        channel: str = "",
+        source_instance_id: str = "",
+    ) -> UnlinkResult:
+        if ctx.db is None:  # pragma: no cover
+            return UnlinkResult(ok=False, error=error_result("storage_error")["error"])
+        return _unlink_impl(
+            repo=ctx.db,
+            source_instance_id=source_instance_id,
+            agent_id=agent_id,
+            project_id=project_id,
+            channel=channel,
+            memory_ref=memory_ref,
+            asset_id=asset_id,
+        )
 
     return server
 

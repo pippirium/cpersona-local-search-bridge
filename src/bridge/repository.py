@@ -111,6 +111,11 @@ class Repository:
         with self.lock:
             self._conn.close()
 
+    def schema_version(self) -> int:
+        """Stored user_version, for health reporting without exposing _conn."""
+        with self.lock:
+            return int(self._conn.execute("PRAGMA user_version").fetchone()[0])
+
     # ---- links (exact-scope only, docs/11 §8) --------------------------------
 
     def link(

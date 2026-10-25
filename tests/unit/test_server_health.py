@@ -145,7 +145,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
     server = create_server(ctx)
     async with connected_client(server) as session:
         names = {t.name for t in (await session.list_tools()).tools}
-        assert names == {"bridge_health"}
+        assert names == {"bridge_health", "link_asset", "unlink_asset"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
