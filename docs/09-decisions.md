@@ -17,6 +17,8 @@ This log separates **approved current facts** from **proposed implementation pol
 | D-11 | Proposed | Track all 18 tasks in this bridge; only create external repo changes with later authorization | Prevent accidental upstream PRs |
 | D-12 | Adopted for plan | No runtime code or release until M0 contract review | Honest status and small blast radius |
 | D-13 | Proposed | Detailed commits in PR and squash-merge planning changes to main | Main remains concise; PR history preserves all commits |
+| D-14 | Adopted (B-01 audit) | Providers pinned at local-search `31f31048…920a` / CPersona fork `7821840f…a5e5`; contract fixtures under fixtures/contracts with tests/contract as the compatibility gate | Client changes must keep fixtures+audit doc in step; measured revisions are recorded, not assumed |
+| D-15 | Adopted (B-01 audit) | memory_ref = opaque `mem:<int>`/`ep:<int>` string (max 128); source_instance_id is configuration, not a provider field | No numeric parsing; instance disambiguation is explicit |
 
 ## Verified source observations (as of 2026-10-26)
 - pippirium/local-search: Python FastAPI backend with model worker and local-search API; text/media search; file ID metadata and original bytes routes; local-only listener/guard; LanceDB plus SQLite; production index evaluator. The original files are read-only.
@@ -25,7 +27,7 @@ This log separates **approved current facts** from **proposed implementation pol
 - The two codebases are independently maintained. API contracts and versions must be pinned to actual commits before B-04.
 
 ## Open decisions / pre-M1 gates
-1. **Memory IDs:** Confirm the exact CPersona MCP response for a memory record and how a trustworthy source_instance_id is derived.
+1. **Memory IDs:** Resolved by B-01 (docs/10-contract-audit.md): refs are `mem:<int>` / `ep:<int>` strings; the Bridge stores them as opaque text and never parses them. CPersona exposes no instance identifier, so source_instance_id is operator configuration (default `""`).
 2. **Provider identity:** Can local-search guarantee an indexed file's identity across index rebuilds with its present read-only APIs? Do we need a new file checksum or stable lookup?
 3. **Scope enforcement:** M1 local use only is acceptable, but if multiple independent untrusted agents are present, what authenticated identity binds scope?
 4. **Search recall:** Post-filtering a bounded candidate list can be incomplete. Is it acceptable to show partial coverage until source-side scoped search exists?

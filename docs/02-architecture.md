@@ -32,6 +32,7 @@ Existing local-search endpoints verified against main (2026-10-26):
 - GET /api/files/{file_id} — file metadata and provenance.
 - GET /api/files/{file_id}/content — original bytes with range capability.
 - GET /api/status — index health. Availability of the exact fields consumed must be checked and version-pinned in B-01/B-06.
+- Verified in B-01 (docs/10-contract-audit.md): 409 `index_mismatch` is returned by the search endpoints only; `GET /api/status` answers 200 and reports `index.mismatch` (`model`/`params`/null) with `index.generation`. File-level staleness surfaces as `409 file_unavailable` (missing/disconnected) or `404 not_found` (unknown/unsearchable id). `GET /api/search` also accepts an optional server-side `folder_id` filter (page_size ∈ {20,50,100}).
 - Registration uses folder management + watcher; no confirmed direct user-file upload/write API exists. M2 therefore copies opt-in assets into a pre-registered folder.
 
 The server intentionally binds to 127.0.0.1 only and verifies Host/Origin/Sec-Fetch-Site. The Bridge HTTP client uses the existing localhost route; **do not** solve remote access by disabling the guard. Container/macOS host arrangements need a dedicated approved design later.

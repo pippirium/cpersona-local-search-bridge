@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "index_mismatch",
+    "message": "The index was built with a different model and cannot be searched. Rebuild the index from settings.",
+    "field": null
+  }
+}

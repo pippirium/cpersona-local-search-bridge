@@ -3,6 +3,8 @@
 ## General rules
 All MCP methods require local trusted stdio in M1. Their request schema rejects extra/unrecognized fields, invalid ID lengths and oversized strings. JSON examples below describe **planned tools**, not operational endpoints. Scope fields: source_instance_id (defaults to empty for a single local CPersona installation), agent_id (required), project_id/channel (optional, normalized to empty).
 
+Verified in B-01 (docs/10-contract-audit.md): `memory_ref` is an opaque string exactly as CPersona spells it — `mem:<int>` or `ep:<int>` (memories and episodes are separate tables whose numeric ids can collide; the prefix is part of the identity). CPersona responses carry **no instance identifier**, so `source_instance_id` is operator configuration, never a provider field.
+
 The MCP caller is not authenticated merely by its declared agent_id. This is a **single-operator trusted-local-process** design, not enterprise multi-tenant isolation. Do not enable remote connections without a strong authenticated principal and policy.
 
 Responses must not include absolute paths, private folder names in public logs, original image bytes except explicit get_asset, or any source material from other scopes.
@@ -56,7 +58,7 @@ Output: stable asset_id, pending/ready status. Implement only with an explicit m
 ## Existing local-search HTTP integration
 | Purpose | Current endpoint | Plan |
 | --- | --- | --- |
-| Find image candidates by text | POST /api/search with q and tab=image | Use for search_assets and attach selection |
+| Find image candidates by text | POST /api/search with q and tab=image | Use for search_assets and attach selection. `page_size` accepts only 20/50/100 (verified in B-01); limit≤20 maps to page_size=20 |
 | Find file details | GET /api/files/{file_id} | Validate kind, status, identity/provenance |
 | Fetch original | GET /api/files/{file_id}/content | Explicit get_asset only; streamed + bounded |
 | Image query | POST /api/search/media | M3 search quality evaluation; not M1 MCP requirement |
@@ -64,6 +66,8 @@ Output: stable asset_id, pending/ready status. Implement only with an explicit m
 | Register watch folder | existing folder management API | Operator/M2 import workflow; do not overwrite source |
 
 The HTTP adapter must accept only configured loopback base URL (http://127.0.0.1:18765 by default). Use a trusted HTTP client with strict redirect prevention, bounded response reads, connect/read timeouts, retry only safe idempotent reads, and parse/version-check returned schemas. A provider 409 index_mismatch is an error, not an empty search.
+
+B-01 guard note (docs/10-contract-audit.md): the provider's Host/Origin guard accepts requests that carry **neither** `Origin` nor `Sec-Fetch-Site` (non-browser clients) but requires `Host` to equal `127.0.0.1:<port>`/`localhost:<port>` and refuses repeated headers. The Bridge client must keep that shape: literal IPv4 loopback base URL, no browser-like headers, no redirects.
 
 ## Error taxonomy
 | Code | Situation |
