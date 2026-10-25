@@ -6,7 +6,7 @@ Do not add binary assets to CPersona's single-file memory store. Do not insert i
 Images stay at original local-search indexed file paths for M1 (read-only). M2 can place explicitly imported **copies** in an opt-in managed folder. Both assets can share the logical asset-reference protocol.
 
 ## Key concepts
-- memory_ref: opaque string supplied from a verified CPersona memory listing; not assumed to be SQLite INTEGER. Multiple CPersona instances require source_instance_id.
+- memory_ref: opaque string supplied from a verified CPersona memory listing; not assumed to be SQLite INTEGER. B-01 verified the actual shapes: `mem:<int>` (memories) and `ep:<int>` (episodes) as spelled by CPersona's recall/reconstruct refs (docs/10-contract-audit.md). They are stored verbatim, validated by pattern only, never parsed as numbers. Multiple CPersona instances require source_instance_id — operator-configured, because CPersona responses carry no instance identifier.
 - scope: (source_instance_id, agent_id, project_id, channel), with normalization of optional components to empty strings; explicit values must round-trip without conflation.
 - asset_id: bridge-generated UUID; stable across provider index rebuilds and multiple memory links.
 - provider_file_id: local-search's numeric file_id, **only a cache/locator**. Never use as permanent identity outside its index/DB instance.

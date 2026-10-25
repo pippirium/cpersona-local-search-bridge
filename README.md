@@ -2,9 +2,9 @@
 
 **CPersonaのテキスト記憶とlocal-searchの画像・ファイル検索をつなぐ、ローカル専用のMCPアダプター計画。**
 
-> **Status: 設計・計画段階（未実装）**
+> **Status: M0進行中（Bridgeサーバー未実装）**
 >
-> このリポジトリには現時点で動作するBridgeサーバーやMCPツールはありません。README・設計・チケットは**実装仕様と作業計画**です。利用を開始できる状態であるかのようには扱わないでください。
+> このリポジトリには現時点で動作するBridgeサーバーやMCPツールはありません。README・設計・チケットは**実装仕様と作業計画**です。利用を開始できる状態であるかのようには扱わないでください。B-01の契約監査（[docs/10](docs/10-contract-audit.md)）と合成fixture＋contractテストが加わりましたが、これらは仕様確定用の検査資産であり、連携サービスは仍然として存在しません。
 
 ## 目的と背景
 
@@ -74,6 +74,7 @@ flowchart LR
 | [07 — Evaluation](docs/07-evaluation.md) | LLM不要の検索精度、評価データ、メトリクス、再現性 |
 | [08 — Security & operations](docs/08-security-operations.md) | 脅威、元ファイル保護、バックアップ、障害復旧 |
 | [09 — Decisions](docs/09-decisions.md) | 決定事項、提案事項、未解決の設計判断 |
+| [10 — Contract audit](docs/10-contract-audit.md) | B-01実測監査: ピンSHA・API実形状・memory_ref・索引世代とfile_id耐久性（合成fixtureとcontractテストが同梱） |
 | [AGENTS.md](AGENTS.md) | AIエージェントに求める開発・安全ルール |
 
 ## 実装ロードマップ
