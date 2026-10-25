@@ -16,6 +16,12 @@ from bridge.errors import BridgeError, error_result
 from bridge.provider import FakeProvider, ProviderPort
 from bridge.repository import Repository
 from bridge.tools_link import LinkResult, UnlinkResult
+from bridge.tools_search import (
+    ListMemoryAssetsResult,
+    SearchAssetsResult,
+    list_memory_assets as _list_impl,
+    search_assets as _search_impl,
+)
 
 BRIDGE_VERSION = "0.0.0"
 
@@ -182,6 +188,70 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             channel=channel,
             memory_ref=memory_ref,
             asset_id=asset_id,
+        )
+
+    # ---- search tools (B-08) --------------------------------------------------
+
+    @server.tool(
+        name="search_assets",
+        description=(
+            "Text-search images THROUGH the provider, then intersect with the "
+            "assets linked in the caller's exact scope. Unlinked library "
+            "files never appear. search_coverage says whether the answer is "
+            "complete ('exact') or a top-N sample ('partial') — never treat "
+            "partial as exhaustive. Returns metadata only, no image bytes."
+        ),
+    )
+    def _search_assets(
+        agent_id: str,
+        query: str,
+        project_id: str = "",
+        channel: str = "",
+        source_instance_id: str = "",
+        limit: int = 10,
+        folder_id: int | None = None,
+    ) -> SearchAssetsResult:
+        if ctx.db is None:  # pragma: no cover
+            return SearchAssetsResult(
+                ok=False, query=query, results=[], search_coverage=None,
+                provider_warning=None,
+                error=error_result("storage_error")["error"],
+            )
+        return _search_impl(
+            provider=ctx.provider, repo=ctx.db,
+            provider_instance_id=ctx.config.provider_instance_id,
+            source_instance_id=source_instance_id, agent_id=agent_id,
+            project_id=project_id, channel=channel,
+            query=query, limit=limit, folder_id=folder_id,
+        )
+
+    @server.tool(
+        name="list_memory_assets",
+        description=(
+            "List assets linked to one memory reference in the caller's "
+            "exact scope, newest link first. Metadata only (kind, label, "
+            "status, asset_id); call get_asset explicitly for image bytes."
+        ),
+    )
+    def _list_memory_assets(
+        agent_id: str,
+        memory_ref: str,
+        project_id: str = "",
+        channel: str = "",
+        source_instance_id: str = "",
+        limit: int = 20,
+    ) -> ListMemoryAssetsResult:
+        if ctx.db is None:  # pragma: no cover
+            return ListMemoryAssetsResult(
+                ok=False, memory_ref=memory_ref, assets=[],
+                error=error_result("storage_error")["error"],
+            )
+        return _list_impl(
+            repo=ctx.db,
+            provider_instance_id=ctx.config.provider_instance_id,
+            source_instance_id=source_instance_id, agent_id=agent_id,
+            project_id=project_id, channel=channel,
+            memory_ref=memory_ref, limit=limit,
         )
 
     return server

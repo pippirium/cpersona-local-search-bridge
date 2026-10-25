@@ -195,7 +195,7 @@ class Repository:
             rows = self._conn.execute(
                 "SELECT a.asset_id, a.origin, a.media_kind, a.media_type, a.size_bytes,"
                 " l.status, l.provider_file_id, l.provider_generation, l.last_seen_name,"
-                " l.last_seen_mtime, l.last_seen_size, l.verified_at"
+                " l.last_seen_mtime, l.last_seen_size, l.verified_at, k.created_at"
                 " FROM asset_links k"
                 " JOIN assets a ON a.asset_id = k.asset_id"
                 " LEFT JOIN provider_locators l"
@@ -209,7 +209,7 @@ class Repository:
             keys = ("asset_id", "origin", "media_kind", "media_type", "size_bytes",
                     "locator_status", "provider_file_id", "provider_generation",
                     "last_seen_name", "last_seen_mtime", "last_seen_size",
-                    "verified_at")
+                    "verified_at", "linked_at")
             return [dict(zip(keys, r)) for r in rows]
 
     def links_for_asset(
