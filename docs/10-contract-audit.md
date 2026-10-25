@@ -70,7 +70,7 @@ Original bytes. `Content-Type` derived from extension (`originals.content_type`;
 
 ### memory_ref decision (for B-02)
 
-`memory_ref` is an **opaque string** exactly as the provider spells it: `mem:<int>` or `ep:<int>` (max length 128; empty rejected). The Bridge stores it as text, never parses the numeric part as an identity, and never assumes INTEGER. Both prefixes are accepted because both are real memory records; the prefix keeps numeric collisions between the two CPersona tables from conflating different memories.
+`memory_ref` is an **opaque string** exactly as the provider spells it: `mem:<int>` or `ep:<int>` — pattern `(mem|ep):[1-9][0-9]{0,17}` (rowids fit SQLite's 2^63−1), total length ≤128, empty rejected; no leading zeros; `profile` (id −1) is synthetic and not attachable. The Bridge stores it as text, never parses the numeric part as an identity, and never assumes INTEGER. Both prefixes are accepted because both are real memory records; the prefix keeps numeric collisions between the two CPersona tables from conflating different memories. (Pattern is enforced by `tests/contract/test_cpersona_memory_ref.py` and becomes the tool-level validation in B-04/B-07.)
 
 ## Index generation & file identity (feeds LS-01 and B-12)
 
