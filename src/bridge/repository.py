@@ -280,6 +280,27 @@ class Repository:
             ).fetchone()
             return row is not None
 
+    def locator_evidence_for_file(
+        self, provider_instance_id: str, provider_file_id: int
+    ) -> list[dict]:
+        """Full evidence rows for a provider file binding (B-10 source-staleness
+        check, B-12 reconciliation). asset_id + last_seen_* only — never paths."""
+        with self.lock:
+            rows = self._conn.execute(
+                "SELECT asset_id, last_seen_kind, last_seen_name,"
+                " last_seen_mtime, last_seen_size, status,"
+                " provider_generation, provider_folder_id"
+                " FROM provider_locators WHERE provider_instance_id=?"
+                " AND provider_file_id=?",
+                (provider_instance_id, int(provider_file_id)),
+            ).fetchall()
+        return [
+            {"asset_id": r[0], "last_seen_kind": r[1], "last_seen_name": r[2],
+             "last_seen_mtime": r[3], "last_seen_size": r[4], "status": r[5],
+             "provider_generation": r[6], "provider_folder_id": r[7]}
+            for r in rows
+        ]
+
     def locators_by_file(
         self, provider_instance_id: str, provider_file_id: int
     ) -> list[str]:
@@ -372,24 +393,74 @@ class Repository:
                              last_seen_size, status, now),
                         )
                     else:
+                        # B-10: a managed import creates a pending locator with
+                        # provider_file_id NULL but folder evidence set (the
+                        # folder the copy landed in). Evidence columns update on
+                        # conflict; provider_file_id still does not exist here
+                        # at all (docs/11 §3: NULL only while pending).
                         self._conn.execute(
                             "INSERT INTO provider_locators (asset_id,"
                             " provider_instance_id, provider_generation,"
-                            " last_seen_name, status, verified_at)"
-                            " VALUES (?, ?, ?, ?, ?, ?)"
+                            " provider_folder_id, last_seen_kind,"
+                            " last_seen_name, last_seen_size, status,"
+                            " verified_at)"
+                            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                             " ON CONFLICT (asset_id, provider_instance_id)"
                             " DO UPDATE SET"
                             " provider_generation=excluded.provider_generation,"
+                            " provider_folder_id=COALESCE("
+                            " excluded.provider_folder_id,"
+                            " provider_locators.provider_folder_id),"
+                            " last_seen_kind=COALESCE(excluded.last_seen_kind,"
+                            " provider_locators.last_seen_kind),"
                             " last_seen_name=excluded.last_seen_name,"
+                            " last_seen_size=COALESCE(excluded.last_seen_size,"
+                            " provider_locators.last_seen_size),"
                             " status=excluded.status,"
                             " verified_at=excluded.verified_at",
                             (asset_id, provider_instance_id, provider_generation,
-                             last_seen_name, status, now),
+                             provider_folder_id, last_seen_kind, last_seen_name,
+                             last_seen_size, status, now),
                         )
             except sqlite3.Error:
                 raise StorageError(
                     "asset/locator upsert violated a constraint"
                 ) from None
+
+    def set_asset_digest(self, *, asset_id: str, content_sha256: str) -> None:
+        """Records the digest of bytes the Bridge itself verified via an
+        explicit fetch (docs/11 §5: a hash exists ONLY after explicit fetch,
+        never acquired implicitly). B-10 import uses it; nothing else may."""
+        with self.lock:
+            if not re.match(r"^[0-9a-f]{64}$", content_sha256):
+                raise StorageError("invalid digest")
+            with self._conn:
+                cur = self._conn.execute(
+                    "UPDATE assets SET content_sha256=?, updated_at=?"
+                    " WHERE asset_id=?",
+                    (content_sha256, utc_now(), asset_id),
+                )
+                if cur.rowcount == 0:
+                    raise StorageError("no such asset")
+
+    def find_managed_asset_by_hash(self, content_sha256: str) -> dict | None:
+        """Managed asset whose stored digest matches (content-addressed dedup,
+        B-10). Exact 64-hex only — a malformed digest never matches."""
+        with self.lock:
+            if not re.match(r"^[0-9a-f]{64}$", content_sha256):
+                return None
+            cur = self._conn.execute(
+                "SELECT asset_id, relative_managed_path, media_type, size_bytes"
+                " FROM assets WHERE origin='managed' AND content_sha256 = ?",
+                (content_sha256,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "asset_id": row[0], "relative_managed_path": row[1],
+            "media_type": row[2], "size_bytes": row[3],
+        }
 
     def set_locator_status(
         self,

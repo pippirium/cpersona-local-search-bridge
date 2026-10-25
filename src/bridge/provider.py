@@ -28,6 +28,19 @@ class ProviderPort(Protocol):
 
     def file_content(self, file_id: int, max_bytes: int) -> tuple[bytes, str]: ...
 
+    def folders(self) -> list[dict]:
+        def op() -> list[dict]:
+            self.calls.append(("folders", (), {}))
+            self._fail("folders")
+            return [
+                {"id": fid, "name": f"folder-{fid}", "watch": f.get("watch", True),
+                 "status": f.get("status", "watching"), "kinds": ["image"],
+                 "path": "/fixture-root/folder-" + str(fid)}
+                for fid, f in sorted(self.folders_data.items())
+            ]
+
+        return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
+
     def search(
         self,
         q: str,
@@ -36,6 +49,8 @@ class ProviderPort(Protocol):
         folder_id: int | None = None,
         cursor: str | None = None,
     ) -> dict: ...
+
+    def folders(self) -> list[dict]: ...
 
 
 def _retry_get(op: Callable[[], dict], *, retryable: bool):
@@ -96,6 +111,9 @@ class FakeProvider:
     mismatch: str | None = None
     failures: list[FakeFailure] = field(default_factory=list)
     calls: list[tuple[str, tuple, dict]] = field(default_factory=list)
+    # B-10: provider folder ledger as the Fake sees it — id -> {watch, status,
+    # path}. path is absolute fake data and must never reach tool results.
+    folders_data: dict[int, dict] = field(default_factory=dict)
 
     def _fail(self, route: str) -> None:
         for f in self.failures:
@@ -155,6 +173,19 @@ class FakeProvider:
         # content is header-retryable only; body faults are not retried (T-07)
         result = _retry_get(lambda: {"v": op()}, retryable=True)["v"]
         return result
+
+    def folders(self) -> list[dict]:
+        def op() -> list[dict]:
+            self.calls.append(("folders", (), {}))
+            self._fail("folders")
+            return [
+                {"id": fid, "name": f"folder-{fid}", "watch": f.get("watch", True),
+                 "status": f.get("status", "watching"), "kinds": ["image"],
+                 "path": "/fixture-root/folder-" + str(fid)}
+                for fid, f in sorted(self.folders_data.items())
+            ]
+
+        return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
     def search(
         self,
