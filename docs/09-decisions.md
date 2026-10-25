@@ -32,9 +32,9 @@ This log separates **approved current facts** from **proposed implementation pol
 
 ## Open decisions / pre-M1 gates
 1. **Memory IDs:** Resolved by B-01 (docs/10-contract-audit.md): refs are `mem:<int>` / `ep:<int>` strings; the Bridge stores them as opaque text and never parses them. CPersona exposes no instance identifier, so source_instance_id is operator configuration (default `""`).
-2. **Provider identity:** Can local-search guarantee an indexed file's identity across index rebuilds with its present read-only APIs? Do we need a new file checksum or stable lookup?
+2. **Provider identity:** Resolved by LS-01 (docs/13): `file_id` is durable across rebuilds/moves with today's read-only APIs; delete+re-add or rowid reuse is fail-closed via evidence (never numeric-only rebind). No checksum endpoint exists; in-place replacement keeping size+mtime is an accepted residual risk (byte confirmation only via explicit fetch). **No local-search change requested.**
 3. **Scope enforcement:** M1 local use only is acceptable, but if multiple independent untrusted agents are present, what authenticated identity binds scope?
-4. **Search recall:** Post-filtering a bounded candidate list can be incomplete. Is it acceptable to show partial coverage until source-side scoped search exists?
+4. **Search recall:** Resolved by LS-01 (docs/13 Q2): `folder_id` is the only provider filter; external-asset scoped search reports `search_coverage=partial` truthfully (M2's managed folder gives exact coverage for managed assets via `folder_id`). Accepted; no provider change.
 5. **Media limits:** Interim defaults adopted by B-03 (docs/12 §3, D-18): 8×10⁶ bytes, 40 MP, JPEG/PNG/WebP/GIF; HEIC/HEIF typed-rejected without auto-conversion. Still open: measured client compatibility must be re-verified in B-15 before calling the defaults final — the values are explicit starting points, not measured guarantees.
 6. **License:** Public repository does not automatically grant an open-source license. Select a license explicitly before encouraging third-party distribution; do not assume local-search's license.
 7. **Owned files:** Define whether M2 managed files support explicit delete/GC and associated retention requirements; M1 must never delete source assets.
