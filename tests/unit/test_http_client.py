@@ -314,3 +314,54 @@ def test_construction_refuses_non_loopback_base(tmp_path):
     bad = replace(cfg, provider_base_url="http://localhost:18765")
     with pytest.raises(ValueError):
         LocalSearchClient(bad)
+
+
+def test_folders_dict_response_is_incompatible():
+    """GET /api/folders must answer an array; a dict means provider drift."""
+    import httpx
+
+    from bridge.config import validate_config
+    from bridge.client import LocalSearchClient
+    from bridge.errors import BridgeError
+
+    def handler(request):
+        return httpx.Response(200, json={"folders": []})
+
+    cfg = validate_config(data_dir=__import__("tempfile").TemporaryDirectory().name or "/tmp",
+                          provider_base_url="http://127.0.0.1:18765")
+    client = LocalSearchClient(cfg)
+    client._client = httpx.Client(transport=httpx.MockTransport(handler),
+                                  base_url=cfg.provider_base_url)
+    try:
+        import pytest
+
+        with pytest.raises(BridgeError) as e:
+            client.folders()
+        assert e.value.code == "index_incompatible"
+    finally:
+        client.close()
+
+
+def test_folders_array_ok():
+    import httpx
+
+    from bridge.config import validate_config
+    from bridge.client import LocalSearchClient
+
+    def handler(request):
+        assert request.url.path == "/api/folders"
+        return httpx.Response(200, json=[{"id": 77, "watch": True}])
+
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as td:
+        cfg = validate_config(data_dir=Path(td) / "d",
+                              provider_base_url="http://127.0.0.1:18765")
+        client = LocalSearchClient(cfg)
+        client._client = httpx.Client(transport=httpx.MockTransport(handler),
+                                      base_url=cfg.provider_base_url)
+        try:
+            assert client.folders() == [{"id": 77, "watch": True}]
+        finally:
+            client.close()

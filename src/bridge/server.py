@@ -17,6 +17,7 @@ from bridge.provider import FakeProvider, ProviderPort
 from bridge.repository import Repository
 from bridge.tools_link import LinkResult, UnlinkResult
 from bridge.tools_get import GetAssetResult, get_asset as _get_impl
+from bridge.tools_import import RegisterAssetResult, register_asset as _register_impl
 from bridge.tools_search import (
     ListMemoryAssetsResult,
     SearchAssetsResult,
@@ -61,6 +62,13 @@ class HealthResult:
     provider: ProviderHealth
     storage: StorageHealth
     warnings: list[str]
+    # B-10/B-11 managed-import readiness (B-11 consumes these):
+    # registered = the configured folder id exists in the provider ledger;
+    # watch = that folder has the watcher on (a copy that is never scanned
+    # stays pending forever). None = not probed / feature off.
+    managed_enabled: bool = False
+    managed_folder_registered: bool | None = None
+    managed_watch: bool | None = None
 
 
 def _storage_health(ctx: BridgeContext) -> StorageHealth:
@@ -96,8 +104,32 @@ def bridge_health(ctx: BridgeContext) -> HealthResult:
     except BridgeError as exc:
         provider.fault = exc.code  # Bridge taxonomy code only (T-09)
         warnings.append("provider_unreachable")
+    managed_enabled = ctx.config.managed_folder_id is not None
+    managed_registered: bool | None = None
+    managed_watch: bool | None = None
+    if managed_enabled:
+        try:
+            folders = ctx.provider.folders()
+            match = next(
+                (f for f in folders
+                 if f.get("id") == ctx.config.managed_folder_id),
+                None,
+            )
+            managed_registered = match is not None
+            managed_watch = bool(match.get("watch")) if match else None
+            if match is None:
+                warnings.append("managed_folder_unregistered")
+            elif not managed_watch:
+                warnings.append("managed_folder_unwatched")
+        except BridgeError as exc:
+            provider.fault = provider.fault or exc.code
+            warnings.append("provider_unreachable")
+
     return HealthResult(
         bridge_version=BRIDGE_VERSION,
+        managed_enabled=managed_enabled,
+        managed_folder_registered=managed_registered,
+        managed_watch=managed_watch,
         schema_version=1,
         provider_instance_id=ctx.config.provider_instance_id,
         provider=provider,
@@ -284,6 +316,36 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             source_instance_id=source_instance_id, agent_id=agent_id,
             project_id=project_id, channel=channel,
             asset_id=asset_id, memory_ref=memory_ref,
+        )
+
+    # ---- register_asset (B-10): the only copy path ----------------------------
+
+    @server.tool(
+        name="register_asset",
+        description=(
+            "Copy ONE explicitly named indexed image into the Bridge-managed "
+            "folder (opt-in feature) and link it to a memory. The original is "
+            "never modified; the copy is content-addressed and never "
+            "overwritten. Requires BRIDGE_MANAGED_ROOT configuration."
+        ),
+    )
+    def _register_asset(
+        agent_id: str,
+        memory_ref: str,
+        provider_file_id: int,
+        project_id: str = "",
+        channel: str = "",
+        source_instance_id: str = "",
+    ) -> RegisterAssetResult:
+        if ctx.db is None:  # pragma: no cover
+            return RegisterAssetResult(
+                ok=False, error=error_result("storage_error")["error"]
+            )
+        return _register_impl(
+            provider=ctx.provider, repo=ctx.db, config=ctx.config,
+            source_instance_id=source_instance_id, agent_id=agent_id,
+            project_id=project_id, channel=channel,
+            memory_ref=memory_ref, provider_file_id=provider_file_id,
         )
 
     return server

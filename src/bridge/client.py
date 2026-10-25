@@ -94,6 +94,16 @@ class LocalSearchClient:
         return _retry_get(op, retryable=retryable)
 
     @staticmethod
+    def _json_list(response: httpx.Response) -> list:
+        try:
+            data = response.json()
+        except Exception:
+            raise BridgeError("index_incompatible", provider_code="bad_json") from None
+        if not isinstance(data, list):
+            raise BridgeError("index_incompatible", provider_code="bad_json")
+        return data
+
+    @staticmethod
     def _json(response: httpx.Response) -> dict:
         try:
             data = response.json()
@@ -135,6 +145,14 @@ class LocalSearchClient:
             raise BridgeError("invalid_request", provider_code="bad_request")
         self._check(response)
         return self._json(response)
+
+    def folders(self) -> list[dict]:
+        # GET /api/folders answers with a JSON ARRAY (contract audit docs/10);
+        # a dict from it is the provider drifting from contract, which is an
+        # incompatibility, not something to guess about.
+        response = self._get("/api/folders", retryable=True)
+        self._check(response)
+        return self._json_list(response)
 
     def file_detail(self, file_id: int) -> dict:
         response = self._get(f"/api/files/{int(file_id)}", retryable=True)

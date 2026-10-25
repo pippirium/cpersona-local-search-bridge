@@ -62,6 +62,11 @@ class BridgeConfig:
     connect_timeout_s: float = CONNECT_TIMEOUT_S
     read_timeout_s: float = READ_TIMEOUT_S
     total_content_cap_s: float = TOTAL_CONTENT_CAP_S
+    # B-10 managed import: OPTIONAL opt-in storage. None = feature disabled and
+    # register_asset refuses. Managed storage must never be an implicit
+    # consequence of having a data dir (docs/03 §5, docs/08 §Managed files).
+    managed_folder_id: int | None = None
+    managed_root: Path | None = None
 
 
 def validate_config(
@@ -73,6 +78,8 @@ def validate_config(
     provider_data_dirs: tuple[str, ...] = (),
     max_fetch_bytes: int = MAX_FETCH_BYTES,
     max_pixels: int = MAX_PIXELS,
+    managed_folder_id: int | None = None,
+    managed_root: str | Path | None = None,
 ) -> BridgeConfig:
     """Validate and materialize the configuration; raises ConfigError only."""
     if not is_literal_loopback(provider_base_url):
@@ -97,6 +104,40 @@ def validate_config(
         raise ConfigError("The Bridge data directory must not be accessible to other users (needs 0700).")
 
     resolved = path.resolve()
+
+    # -- managed import folder (B-10): all-or-nothing opt-in ------------------
+    m_root: Path | None = None
+    if (managed_folder_id is None) != (managed_root is None):
+        raise ConfigError(
+            "Managed import needs both BRIDGE_MANAGED_FOLDER_ID and "
+            "BRIDGE_MANAGED_ROOT (or neither)."
+        )
+    if managed_root is not None:
+        assert managed_folder_id is not None and managed_folder_id > 0, (
+            "managed_folder_id must be a positive provider folder id"
+        )
+        mr = Path(managed_root).expanduser()
+        # The managed root IS a provider-registered folder by contract, so the
+        # provider-data-dir containment rule below must not reject it: the
+        # containment check applies to the SQLite data dir only.
+        try:
+            mr.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError:
+            raise ConfigError(
+                "The managed asset folder cannot be created or is not accessible."
+            ) from None
+        try:
+            mmode = stat.S_IMODE(mr.stat().st_mode)
+        except OSError:
+            raise ConfigError(
+                "The managed asset folder cannot be inspected."
+            ) from None
+        if mmode & 0o077:
+            raise ConfigError(
+                "The managed asset folder must not be accessible to other users (needs 0700)."
+            )
+        m_root = mr
+
     for provider_dir in provider_data_dirs:
         try:
             pd = Path(provider_dir).expanduser().resolve()
@@ -113,6 +154,8 @@ def validate_config(
         source_instance_id=source_instance_id or "",
         max_fetch_bytes=max_fetch_bytes,
         max_pixels=max_pixels,
+        managed_folder_id=managed_folder_id,
+        managed_root=m_root,
     )
 
 
@@ -133,4 +176,18 @@ def load_config(env: dict[str, str]) -> BridgeConfig:
         provider_data_dirs=tuple(
             d for d in (env.get("BRIDGE_PROVIDER_DATA_DIRS", "").split(os.pathsep)) if d
         ),
+        managed_folder_id=_managed_folder_id_from(env),
+        managed_root=env.get("BRIDGE_MANAGED_ROOT", "") or None,
     )
+def _managed_folder_id_from(env: dict[str, str]) -> int | None:
+    raw = env.get("BRIDGE_MANAGED_FOLDER_ID", "")
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ConfigError("BRIDGE_MANAGED_FOLDER_ID must be a positive integer.") from None
+    if value <= 0:
+        raise ConfigError("BRIDGE_MANAGED_FOLDER_ID must be a positive integer.")
+    return value
+

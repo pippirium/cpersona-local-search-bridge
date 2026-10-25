@@ -31,6 +31,11 @@ PROVIDER_CODE_MAP = {
     "model_loading": "dependency_unavailable",
     "forbidden_host": "index_incompatible",
     "search_expired": "invalid_request",
+    # B-10 copy-path codes (docs/04 register_asset contract): an unmapped code
+    # would say "the provider API is incompatible", which is wrong — these are
+    # transient refusals of THIS copy operation.
+    "path_conflict": "path_conflict",
+    "storage_full": "storage_full",
 }
 
 
@@ -56,6 +61,12 @@ ERRORS: dict[str, ErrorSpec] = {
         ErrorSpec("dependency_unavailable", "The asset provider cannot be reached."),
         ErrorSpec("index_incompatible", "The provider index or API is incompatible."),
         ErrorSpec("storage_error", "The Bridge storage operation failed."),
+        # B-10 managed import (docs/04 register_asset, docs/03 §5): failures of
+        # the COPY path, kept distinct from asset availability so an operator
+        # can tell "this import did not land" from "this asset is offline".
+        ErrorSpec("storage_full", "The managed storage cannot accept the copy."),
+        ErrorSpec("path_conflict", "A managed asset already occupies that content path."),
+        ErrorSpec("source_unreadable", "The provider could not serve the source bytes for the copy."),
     )
 }
 
