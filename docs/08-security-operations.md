@@ -22,7 +22,7 @@ M1: trusted, local macOS process. Bridge MCP speaks stdio; local-search listens 
 | Arbitrary file read | No path in get_asset; provider API checks file_id and contained path | Traversal, symlink and tampered locator tests |
 | Index ID reuse | Stable bridge asset_id; revalidate source identity; stale fail-closed | Provider reindex and file swap tests |
 | Huge/decompression-bomb media | MIME/size/dimension constraints; bounded streaming; safe decoding | Extreme size and crafted payload tests |
-| SS RF/redirect | Loopback-only configured provider URL; redirects off | Redirect/foreign host/IPv6/alternate scheme tests |
+| SSRF/redirect | Loopback-only configured provider URL; redirects off | Redirect/foreign host/IPv6/alternate scheme tests |
 | Leaked secrets/logs | Sanitized structured errors, 0700 dir, no raw payload logs | Sentinel search audit in logs and Git |
 | Partial write/crash | SQLite transaction and atomic copy; restart reconciliation | Kill/restart at each simulated stage |
 | Provider outage | Typed dependency error, preserve original metadata | Stubbed timeout/connectivity tests |
