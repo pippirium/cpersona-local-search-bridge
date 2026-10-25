@@ -19,6 +19,10 @@ This log separates **approved current facts** from **proposed implementation pol
 | D-13 | Proposed | Detailed commits in PR and squash-merge planning changes to main | Main remains concise; PR history preserves all commits |
 | D-14 | Adopted (B-01 audit) | Providers pinned at local-search `31f31048…920a` / CPersona fork `7821840f…a5e5`; contract fixtures under fixtures/contracts with tests/contract as the compatibility gate | Client changes must keep fixtures+audit doc in step; measured revisions are recorded, not assumed |
 | D-15 | Adopted (B-01 audit) | memory_ref = opaque `mem:<int>`/`ep:<int>` string (max 128); source_instance_id is configuration, not a provider field | No numeric parsing; instance disambiguation is explicit |
+| D-16 | Adopted (B-02) | Bridge scope is exact-equality over four strings normalized `None→""` only; CPersona's γ/channel widening is deliberately not mirrored in link visibility | No implicit cross-scope reads; agents must reuse the identical scope tuple (CP-01 guide) |
+| D-17 | Adopted (B-02) | v1 schema frozen in `migrations/0001_v1.sql`; `provider_file_id` NULL only while pending (partial unique index); locator state graph and revalidation evidence frozen in docs/11 §4–§5 | B-05/B-11/B-12 implement against tests that already pin these rules |
+| D-18 | Adopted (B-03) | M1 media caps 8×10⁶ B / 40 MP / JPEG+PNG+WebP+GIF, config-only downward; HEIC/HEIF typed-rejected, never auto-converted | No caller-controlled limits; no silent re-encoding of user originals |
+| D-19 | Adopted (B-03) | Logs/responses/fixtures obey the docs/12 §6 forbidden-strings list; scope tuples appear only as a truncated sha256 in logs | CI sentinel test enforces on tracked files |
 
 ## Verified source observations (as of 2026-10-26)
 - pippirium/local-search: Python FastAPI backend with model worker and local-search API; text/media search; file ID metadata and original bytes routes; local-only listener/guard; LanceDB plus SQLite; production index evaluator. The original files are read-only.
@@ -28,10 +32,10 @@ This log separates **approved current facts** from **proposed implementation pol
 
 ## Open decisions / pre-M1 gates
 1. **Memory IDs:** Resolved by B-01 (docs/10-contract-audit.md): refs are `mem:<int>` / `ep:<int>` strings; the Bridge stores them as opaque text and never parses them. CPersona exposes no instance identifier, so source_instance_id is operator configuration (default `""`).
-2. **Provider identity:** Can local-search guarantee an indexed file's identity across index rebuilds with its present read-only APIs? Do we need a new file checksum or stable lookup?
+2. **Provider identity:** Resolved by LS-01 (docs/13): `file_id` is durable across rebuilds/moves with today's read-only APIs; delete+re-add or rowid reuse is fail-closed via evidence (never numeric-only rebind). No checksum endpoint exists; in-place replacement keeping size+mtime is an accepted residual risk (byte confirmation only via explicit fetch). **No local-search change requested.**
 3. **Scope enforcement:** M1 local use only is acceptable, but if multiple independent untrusted agents are present, what authenticated identity binds scope?
-4. **Search recall:** Post-filtering a bounded candidate list can be incomplete. Is it acceptable to show partial coverage until source-side scoped search exists?
-5. **Media limits:** Choose defaults for input bytes, output bytes, pixel count and returned MIME using measured client compatibility; do not hardcode unverified limits in docs.
+4. **Search recall:** Resolved by LS-01 (docs/13 Q2): `folder_id` is the only provider filter; external-asset scoped search reports `search_coverage=partial` truthfully (M2's managed folder gives exact coverage for managed assets via `folder_id`). Accepted; no provider change.
+5. **Media limits:** Interim defaults adopted by B-03 (docs/12 §3, D-18): 8×10⁶ bytes, 40 MP, JPEG/PNG/WebP/GIF; HEIC/HEIF typed-rejected without auto-conversion. Still open: measured client compatibility must be re-verified in B-15 before calling the defaults final — the values are explicit starting points, not measured guarantees.
 6. **License:** Public repository does not automatically grant an open-source license. Select a license explicitly before encouraging third-party distribution; do not assume local-search's license.
 7. **Owned files:** Define whether M2 managed files support explicit delete/GC and associated retention requirements; M1 must never delete source assets.
 
