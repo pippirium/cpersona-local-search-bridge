@@ -1,0 +1,43 @@
+# Python and tool state
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Secrets and per-machine settings
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+.secrets/
+.local/
+
+# Runtime state: never commit memories, originals or indexes
+data/
+runtime/
+assets/
+cache/
+models/
+reports/private/
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
+*.db-shm
+*.db-wal
+*.lance
+*.lancedb
+
+# System and IDE
+.DS_Store
+.idea/
+.vscode/
