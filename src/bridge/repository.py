@@ -463,12 +463,30 @@ class Repository:
             for r in rows
         ]
 
+    def managed_asset_paths(self, provider_instance_id: str) -> dict:
+        """asset_id -> relative_managed_path for every managed asset with a
+        locator row for this provider instance (orphan audit input)."""
+        with self.lock:
+            rows = self._conn.execute(
+                "SELECT a.asset_id, a.relative_managed_path"
+                " FROM assets a JOIN provider_locators l ON l.asset_id=a.asset_id"
+                " WHERE a.origin='managed' AND l.provider_instance_id=?"
+                " AND a.relative_managed_path IS NOT NULL",
+                (provider_instance_id,),
+            ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
     def sweep_locators(self, provider_instance_id: str,
                        statuses: tuple[str, ...] = ("ready", "stale",
                                                     "missing"),
                        limit: int = 200) -> list[dict]:
         """Locators due for revalidation (B-12 sweep input): every resolved
-        locator in the given statuses with its stored evidence row."""
+        locator in the given statuses with its stored evidence row.
+
+        Order: rows never verified first (NULL verified_at — including rows
+        whose last transition was a DEMOTION, which must not be starved),
+        then oldest verified, so a bounded sweep is fair and every row is
+        eventually reached."""
         with self.lock:
             marks = ",".join("?" for _ in statuses)
             rows = self._conn.execute(
@@ -478,8 +496,8 @@ class Repository:
                 " FROM provider_locators l"
                 " WHERE l.provider_instance_id=? AND l.status IN (" + marks + ")"
                 " AND l.provider_file_id IS NOT NULL"
-                " ORDER BY l.verified_at IS NULL, l.verified_at, l.rowid"
-                " LIMIT ?",
+                " ORDER BY l.verified_at IS NULL DESC,"
+                " l.verified_at, l.rowid LIMIT ?",
                 (provider_instance_id, *statuses, max(1, int(limit))),
             ).fetchall()
         return [
