@@ -4,7 +4,10 @@ version = "0.0.0"
 description = "MCP adapter associating CPersona memories with local-search indexed assets (metadata only)."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "httpx>=0.27",
+    "mcp>=2.3,<3",
+]
 
 [dependency-groups]
 dev = [
@@ -14,6 +17,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["src"]
 
 [tool.uv]
 package = false

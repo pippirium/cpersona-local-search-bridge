@@ -16,6 +16,8 @@ M1: trusted, local macOS process. Bridge MCP speaks stdio; local-search listens 
 - Treat a public GitHub repo as public even when integrated with a currently private dependency. Never copy local-search source code or confidential designs.
 
 ## Threats and checks
+The frozen M1 policy (B-03) is [docs/12-threat-model-media-policy.md](12-threat-model-media-policy.md): concrete caps (8×10⁶ bytes, 40 MP, JPEG/PNG/WebP/GIF; HEIC typed-rejected), HTTP client rules (literal `127.0.0.1` base URL, redirects off, 2s/10s/30s timeouts, connect-phase-only single retry), the identity-evidence restatement and the forbidden-strings log audit (scope tuples appear in logs only as a 12-hex truncated hash). The table below remains the summary; docs/12 §2 is the acceptance-level list and `tests/security/` executes its pure rules.
+
 | Threat | Mitigation | Verification |
 | --- | --- | --- |
 | Scope spoofing | Local trusted-agent boundary; prevent accidental scope mismatch; no remote serving | Cross-agent/project/channel negative tests; remote disabled |
