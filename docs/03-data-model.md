@@ -68,7 +68,7 @@ CREATE INDEX idx_provider_locators_status
   ON provider_locators (provider_instance_id, status);
 ~~~
 
-This DDL is a **contract draft**. B-02 must validate SQLite foreign keys, migration versioning, unique nullable behavior, reuse rules, timestamp formats and whether provider_generation is actually supplied. In particular, provider_file_id may be NULL pending resolution; UNIQUE permits multiple NULL rows.
+This DDL was frozen by B-02 into `migrations/0001_v1.sql` with the decisions recorded in [docs/11-id-schema-scope.md](11-id-schema-scope.md): `PRAGMA user_version` versioning, per-connection `foreign_keys=ON`, a partial unique index so pending locators (NULL `provider_file_id`) coexist while resolved ones collide per provider instance, evidence columns `last_seen_mtime`/`last_seen_size`, `provider_generation` as TEXT, and the frozen locator state graph. Scope is exact-equality over the four strings normalized `None→""` only — CPersona's γ/channel widening is deliberately **not** mirrored (D-16).
 
 ## Consistency and identity
 1. Verify file ID existence/kind with the live local-search API before binding a locator.

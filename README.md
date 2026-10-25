@@ -75,6 +75,7 @@ flowchart LR
 | [08 — Security & operations](docs/08-security-operations.md) | 脅威、元ファイル保護、バックアップ、障害復旧 |
 | [09 — Decisions](docs/09-decisions.md) | 決定事項、提案事項、未解決の設計判断 |
 | [10 — Contract audit](docs/10-contract-audit.md) | B-01実測監査: ピンSHA・API実形状・memory_ref・索引世代とfile_id耐久性（合成fixtureとcontractテストが同梱） |
+| [11 — ID・スキーマ・scope](docs/11-id-schema-scope.md) | B-02確定事項: 永続asset_id・opaque memory_ref・完全一致scope・凍結DDL（migrations/0001_v1.sql）とlocator状態グラフ |
 | [AGENTS.md](AGENTS.md) | AIエージェントに求める開発・安全ルール |
 
 ## 実装ロードマップ
