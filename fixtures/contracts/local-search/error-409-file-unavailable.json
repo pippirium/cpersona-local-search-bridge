@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "file_unavailable",
+    "message": "The file cannot be reached (its drive is disconnected, or it was deleted).",
+    "field": null
+  }
+}

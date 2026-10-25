@@ -1,0 +1,19 @@
+[project]
+name = "cpersona-local-search-bridge"
+version = "0.0.0"
+description = "MCP adapter associating CPersona memories with local-search indexed assets (metadata only)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.uv]
+package = false

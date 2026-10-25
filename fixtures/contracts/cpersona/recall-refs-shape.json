@@ -1,0 +1,20 @@
+{
+  "shape": "recall messages (excerpt of the fields the Bridge consumes)",
+  "messages": [
+    {
+      "id": 42,
+      "role": "user",
+      "content": "synthetic memory preview text",
+      "ref": "mem:42",
+      "content_truncated": false,
+      "content_len": 27
+    },
+    {
+      "id": 7,
+      "role": "system",
+      "content": "synthetic episode summary",
+      "ref": "ep:7"
+    }
+  ],
+  "note": "refs are spelled mem:<int> / ep:<int> (cpersona/recall_trace.py:ref_of); id -1 carries ref 'profile'."
+}

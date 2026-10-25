@@ -1,0 +1,35 @@
+{
+  "version": "0.1.1",
+  "model": {
+    "id": "fixture/embedding-model",
+    "revision": "r000000000000000000000000000000000000000",
+    "config": "text_image",
+    "device": "mps",
+    "dtype": "bf16",
+    "state": "ready",
+    "progress": null,
+    "memory_mb": 4096.0,
+    "error": null
+  },
+  "index": {
+    "generation": 3,
+    "files": { "text": 100, "image": 50, "video": 5 },
+    "chunks": 800,
+    "segments": 20,
+    "vectors": 870,
+    "index_bytes": 1048576,
+    "thumbs_bytes": 204800,
+    "updated_at": "2026-10-20T09:00:00+09:00",
+    "mismatch": null,
+    "rebuilding": null,
+    "deriving_dims": null
+  },
+  "ingest": { "state": "idle", "done": 155, "total": 155, "eta_sec": null },
+  "capabilities": {
+    "open_file": true,
+    "reveal": true,
+    "pick_folder": true,
+    "open_data_dir": true,
+    "mps": true
+  }
+}

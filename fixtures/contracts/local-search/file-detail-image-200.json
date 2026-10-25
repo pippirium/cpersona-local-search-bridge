@@ -1,0 +1,24 @@
+{
+  "file_id": 101,
+  "kind": "image",
+  "name": "synthetic-gpu-01.png",
+  "path": "/fixture-root/library/screens/2026/synthetic-gpu-01.png",
+  "folder_id": 7,
+  "folder": "fixture-library",
+  "rel_dir": "screens/2026",
+  "size": 123456,
+  "mtime": "2026-09-30T11:02:03+09:00",
+  "status": "indexed",
+  "available": true,
+  "thumb": "/api/thumbs/i101",
+  "meta": { "width": 1024, "height": 640, "taken_at": null },
+  "index": {
+    "unit": "image",
+    "count": 1,
+    "segment_sec": null,
+    "overlap_sec": null,
+    "chunk_tokens": null
+  },
+  "hits": [],
+  "contexts": []
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "forbidden_host",
+    "message": "Requests from this connection source are not accepted.",
+    "field": null
+  }
+}

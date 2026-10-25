@@ -1,0 +1,83 @@
+{
+  "search_id": "s-00000000-0001",
+  "generation": 3,
+  "took_ms": 42,
+  "query": {
+    "text": "gpu error screenshot",
+    "media": null,
+    "like": null
+  },
+  "fusion": "rrf",
+  "counts": { "all": 2, "text": 0, "image": 2, "video": 0 },
+  "counts_capped": [],
+  "items": [
+    {
+      "file_id": 101,
+      "kind": "image",
+      "name": "synthetic-gpu-01.png",
+      "folder_id": 7,
+      "folder": "fixture-library",
+      "rel_dir": "screens/2026",
+      "mtime": "2026-09-30T11:02:03+09:00",
+      "size": 123456,
+      "score": 0.81,
+      "rank_score": 0.91,
+      "hit_count": 1,
+      "hits": [
+        {
+          "id": "i101:0",
+          "score": 0.81,
+          "page": null,
+          "heading": null,
+          "excerpt": null,
+          "start_sec": null,
+          "end_sec": null,
+          "thumb": "/api/thumbs/i101"
+        }
+      ],
+      "thumb": "/api/thumbs/i101",
+      "available": true,
+      "duration_sec": null,
+      "width": 1024,
+      "height": 640,
+      "taken_at": null,
+      "pages": null
+    },
+    {
+      "file_id": 102,
+      "kind": "image",
+      "name": "synthetic-gpu-02.jpg",
+      "folder_id": 7,
+      "folder": "fixture-library",
+      "rel_dir": "screens/2026",
+      "mtime": "2026-09-28T08:11:00+09:00",
+      "size": 654321,
+      "score": 0.62,
+      "rank_score": 0.7,
+      "hit_count": 1,
+      "hits": [
+        {
+          "id": "i102:0",
+          "score": 0.62,
+          "page": null,
+          "heading": null,
+          "excerpt": null,
+          "start_sec": null,
+          "end_sec": null,
+          "thumb": "/api/thumbs/i102"
+        }
+      ],
+      "thumb": "/api/thumbs/i102",
+      "available": true,
+      "duration_sec": null,
+      "width": 800,
+      "height": 600,
+      "taken_at": null,
+      "pages": null
+    }
+  ],
+  "next_cursor": null,
+  "remaining": 0,
+  "empty_reason": null,
+  "unfiltered_all": null
+}
