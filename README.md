@@ -78,6 +78,7 @@ flowchart LR
 | [11 — ID・スキーマ・scope](docs/11-id-schema-scope.md) | B-02確定事項: 永続asset_id・opaque memory_ref・完全一致scope・凍結DDL（migrations/0001_v1.sql）とlocator状態グラフ |
 | [12 — 脅威モデル・メディア方針](docs/12-threat-model-media-policy.md) | B-03確定事項: 信頼境界・T-01〜T-15負例表・取得上限（8MB/40MP/JPEG,PNG,WebP,GIF）・HTTPクライアント規則・ログ秘匿監査 |
 | [13 — LS-01 locator監査](docs/13-ls01-locator-audit.md) | reindex/move/消失/rowid再利用でのfile_id耐久性とsearch folder_id制約の結論（**local-search変更不要**・制限は明記） |
+| [14 — CP-01 ユーザー導線](docs/14-cp01-asset-workflow.md) | 記憶ref→link→表示の運用フロー・本文トレーラ形式 `[asset:<uuid4>]`・合成運用サンプル（**CPersona fork変更なし**で成立） |
 | [AGENTS.md](AGENTS.md) | AIエージェントに求める開発・安全ルール |
 
 ## 実装ロードマップ
