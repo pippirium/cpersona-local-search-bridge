@@ -172,3 +172,17 @@ async def test_error_taxonomy_shapes_are_fixed_wording():
     for code, spec in ERRORS.items():
         assert spec.code == code
         assert "\n" not in spec.message  # single-line fixed strings
+
+
+@pytest.mark.anyio
+async def test_health_reports_attached_repository_schema_version(tmp_path):
+    from bridge.repository import Repository, open_repository
+
+    cfg = validate_config(data_dir=tmp_path, provider_base_url="http://127.0.0.1:18765")
+    ctx = BridgeContext(config=cfg, provider=FakeProvider(),
+                        db=Repository(open_repository(tmp_path)))
+    server = create_server(ctx)
+    async with connected_client(server) as session:
+        result = await session.call_tool("bridge_health", {})
+        payload = result.structured_content or {}
+        assert payload["storage"]["schema_version"] == 1

@@ -14,6 +14,7 @@ from mcp.server.mcpserver import MCPServer
 from bridge.config import BridgeConfig, load_config
 from bridge.errors import BridgeError, error_result
 from bridge.provider import FakeProvider, ProviderPort
+from bridge.repository import Repository
 
 BRIDGE_VERSION = "0.0.0"
 
@@ -22,7 +23,7 @@ BRIDGE_VERSION = "0.0.0"
 class BridgeContext:
     config: BridgeConfig
     provider: ProviderPort
-    db=None  # repository handle arrives with B-05
+    db: Repository | None = None  # repository handle (B-05)
 
 
 @dataclass
@@ -52,6 +53,15 @@ class HealthResult:
     provider: ProviderHealth
     storage: StorageHealth
     warnings: list[str]
+
+
+def _storage_health(ctx: BridgeContext) -> StorageHealth:
+    """When a repository is attached, report its ACTUAL schema version from
+    PRAGMA user_version; without one (pure test hosts) report the known value."""
+    if ctx.db is None:
+        return StorageHealth(writable=True, schema_version=1)
+    version = ctx.db._conn.execute("PRAGMA user_version").fetchone()[0]
+    return StorageHealth(writable=True, schema_version=int(version))
 
 
 def bridge_health(ctx: BridgeContext) -> HealthResult:
@@ -84,7 +94,7 @@ def bridge_health(ctx: BridgeContext) -> HealthResult:
         schema_version=1,
         provider_instance_id=ctx.config.provider_instance_id,
         provider=provider,
-        storage=StorageHealth(writable=True, schema_version=1),
+        storage=_storage_health(ctx),
         warnings=warnings,
     )
 
@@ -126,5 +136,10 @@ def main() -> None:  # pragma: no cover - process entrypoint
         # stdout must stay protocol-clean: write to stderr only.
         sys.stderr.write("bridge: configuration error: " + str(exc) + "\n")
         raise SystemExit(2)
-    ctx = BridgeContext(config=config, provider=FakeProvider())
+    from bridge.repository import Repository, open_repository
+
+    conn = open_repository(config.data_dir)
+    ctx = BridgeContext(
+        config=config, provider=FakeProvider(), db=Repository(conn)
+    )
     create_server(ctx).run(transport="stdio")

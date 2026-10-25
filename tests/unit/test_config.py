@@ -106,4 +106,4 @@ def test_config_error_messages_carry_no_paths(tmp_path):
             provider_data_dirs=(str(prov),),
         )
     assert str(prov) not in str(ei.value)
-    assert "/Users/" not in str(ei.value)
+    assert str(tmp_path) not in str(ei.value)
