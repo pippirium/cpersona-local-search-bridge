@@ -154,6 +154,17 @@ class LocalSearchClient:
         self._check(response)
         return self._json_list(response)
 
+    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]:
+        # GET /api/files?folder_id=&limit=N — the folder inventory route from
+        # the contract audit (docs/10); array response, same drift rule as
+        # folders().
+        response = self._get(
+            "/api/files", retryable=True,
+            params={"folder_id": int(folder_id), "limit": int(limit)},
+        )
+        self._check(response)
+        return self._json_list(response)
+
     def file_detail(self, file_id: int) -> dict:
         response = self._get(f"/api/files/{int(file_id)}", retryable=True)
         self._check(response)

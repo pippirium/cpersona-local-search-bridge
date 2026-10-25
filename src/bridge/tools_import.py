@@ -139,7 +139,6 @@ def register_asset(
     channel: str,
     memory_ref: str,
     provider_file_id: int,
-    provider_generation: str | None = None,
 ) -> RegisterAssetResult:
     def fail(code: str, *, aid: str | None = None) -> RegisterAssetResult:
         return RegisterAssetResult(ok=False, asset_id=aid,
@@ -174,6 +173,16 @@ def register_asset(
             if detail.get("kind") != "image" or not detail.get("available", True):
                 return fail("unsupported_media" if detail.get("kind") != "image"
                             else "asset_unavailable")
+            # generation evidence comes from provider data only (docs/11 §5):
+            # one status probe per import; a fault leaves it None (the
+            # pending locator simply carries less evidence, and resolution
+            # re-reads). No caller-provided generation is trusted.
+            try:
+                st = provider.status()
+                gen = (st.get("index") or {}).get("generation")
+                live_generation = None if gen is None else str(gen)
+            except BridgeError:
+                live_generation = None
 
             declared = detail.get("size")
             if declared is not None and not bridge_policy.content_size_acceptable(
@@ -181,6 +190,8 @@ def register_asset(
             ):
                 return fail("media_too_large")
 
+            # a prior external locator on the SOURCE file (B-07 link) supplies
+            # staleness evidence; rowid reuse is caught by its last_seen_* set.
             existing = repo.locator_evidence_for_file(pid, provider_file_id)
             if existing:
                 ev = existing[0]
@@ -193,8 +204,8 @@ def register_asset(
                 # renames (docs/13), so name alone cannot prove reuse there.
                 gen_unchanged = (
                     ev.get("provider_generation") is not None
-                    and provider_generation is not None
-                    and str(ev["provider_generation"]) == str(provider_generation)
+                    and live_generation is not None
+                    and str(ev["provider_generation"]) == live_generation
                 )
                 conflict = (
                     (ev.get("last_seen_size") is not None
@@ -275,10 +286,15 @@ def register_asset(
                     relative_managed_path=rel,
                     provider_instance_id=pid,
                     provider_file_id=None,
-                    provider_generation=provider_generation,
+                    provider_generation=live_generation,
                     provider_folder_id=config.managed_folder_id,
                     last_seen_kind="image",
-                    last_seen_name=Path(rel).name,
+                    # Resolution evidence the provider can actually match for
+                    # a content-addressed copy: size + kind + generation.
+                    # mtime is deliberately NOT stored yet — the copy's mtime
+                    # is its COPY time, which the watcher rewrites as it
+                    # scans; last_seen_mtime is filled at bind time from the
+                    # provider's own value (docs/11 §5: provider data only).
                     last_seen_size=len(data),
                     status="pending",
                 )

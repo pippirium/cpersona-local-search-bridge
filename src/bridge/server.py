@@ -18,6 +18,7 @@ from bridge.repository import Repository
 from bridge.tools_link import LinkResult, UnlinkResult
 from bridge.tools_get import GetAssetResult, get_asset as _get_impl
 from bridge.tools_import import RegisterAssetResult, register_asset as _register_impl
+from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
 from bridge.tools_search import (
     ListMemoryAssetsResult,
     SearchAssetsResult,
@@ -347,6 +348,26 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             project_id=project_id, channel=channel,
             memory_ref=memory_ref, provider_file_id=provider_file_id,
         )
+
+    # ---- resolve_pending_assets (B-11): bounded, safe to poll --------------
+
+    @server.tool(
+        name="resolve_pending_assets",
+        description=(
+            "Resolve pending managed imports against the provider's folder "
+            "inventory (watched-folder premise verified first). Ambiguous or "
+            "unseen candidates stay pending. No scope: managed storage is a "
+            "single-operator concern; this tool never returns paths."
+        ),
+    )
+    def _resolve_pending_assets() -> ResolveReport:
+        if ctx.db is None:  # pragma: no cover
+            return ResolveReport(
+                ok=False, premise_ready=False,
+                error=error_result("storage_error")["error"],
+            )
+        return _resolve_impl(provider=ctx.provider, repo=ctx.db,
+                             config=ctx.config)
 
     return server
 

@@ -41,6 +41,27 @@ class ProviderPort(Protocol):
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
+    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]:
+        def op() -> list[dict]:
+            self.calls.append(("list_folder", (folder_id,), {"limit": limit}))
+            self._fail("list_folder")
+            out = []
+            for fid in self.folder_files.get(folder_id, [])[:limit]:
+                f = self.files.get(fid)
+                if f is None:
+                    # indexed-listing-only: name/size/mtime known, detail 404s
+                    out.append({"file_id": fid, "kind": "image",
+                                "name": f"pending-{fid}.png",
+                                "rel_dir": "00", "size": 64,
+                                "mtime": "2026-10-26T00:00:00+09:00"})
+                else:
+                    out.append({"file_id": fid, "kind": f.kind, "name": f.name,
+                                "rel_dir": f.rel_dir, "size": f.size,
+                                "mtime": f.mtime})
+            return out
+
+        return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
+
     def search(
         self,
         q: str,
@@ -51,6 +72,8 @@ class ProviderPort(Protocol):
     ) -> dict: ...
 
     def folders(self) -> list[dict]: ...
+
+    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]: ...
 
 
 def _retry_get(op: Callable[[], dict], *, retryable: bool):
@@ -114,6 +137,12 @@ class FakeProvider:
     # B-10: provider folder ledger as the Fake sees it — id -> {watch, status,
     # path}. path is absolute fake data and must never reach tool results.
     folders_data: dict[int, dict] = field(default_factory=dict)
+    # B-11: unindexed folder inventory (what list_folder sees); file ids not
+    # present in `files` are visible but WITHOUT detail/content availability.
+    folder_files: dict[int, list[int]] = field(default_factory=dict)
+    # ids the fake search refuses to return (simulates "indexed but not yet
+    # searchable" — resolution must never rely on search visibility)
+    invisible_in_search: set[int] = field(default_factory=set)
 
     def _fail(self, route: str) -> None:
         for f in self.failures:
@@ -187,6 +216,27 @@ class FakeProvider:
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
+    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]:
+        def op() -> list[dict]:
+            self.calls.append(("list_folder", (folder_id,), {"limit": limit}))
+            self._fail("list_folder")
+            out = []
+            for fid in self.folder_files.get(folder_id, [])[:limit]:
+                f = self.files.get(fid)
+                if f is None:
+                    # indexed-listing-only: name/size/mtime known, detail 404s
+                    out.append({"file_id": fid, "kind": "image",
+                                "name": f"pending-{fid}.png",
+                                "rel_dir": "00", "size": 64,
+                                "mtime": "2026-10-26T00:00:00+09:00"})
+                else:
+                    out.append({"file_id": fid, "kind": f.kind, "name": f.name,
+                                "rel_dir": f.rel_dir, "size": f.size,
+                                "mtime": f.mtime})
+            return out
+
+        return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
+
     def search(
         self,
         q: str,
@@ -218,7 +268,8 @@ class FakeProvider:
                     "height": f.height,
                 }
                 for f in sorted(self.files.values(), key=lambda x: -x.file_id)
-                if f.kind == "image" and (folder_id is None or f.folder_id == folder_id)
+                if f.kind == "image" and f.file_id not in self.invisible_in_search
+                and (folder_id is None or f.folder_id == folder_id)
             ][:page_size]
             return {
                 "search_id": "fake-search-id",
