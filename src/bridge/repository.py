@@ -443,6 +443,114 @@ class Repository:
                 if cur.rowcount == 0:
                     raise StorageError("no such asset")
 
+    def folder_pending_assets(self, provider_instance_id: str,
+                              folder_id: int, limit: int = 100) -> list[dict]:
+        """Pending locators awaiting file_id resolution inside a provider
+        folder (B-11 resolution loop over B-10 imports)."""
+        with self.lock:
+            rows = self._conn.execute(
+                "SELECT l.asset_id, a.relative_managed_path, a.media_type,"
+                " a.size_bytes, a.content_sha256"
+                " FROM provider_locators l JOIN assets a ON a.asset_id=l.asset_id"
+                " WHERE l.provider_instance_id=? AND l.status='pending'"
+                " AND l.provider_folder_id=? AND l.provider_file_id IS NULL"
+                " ORDER BY l.rowid LIMIT ?",
+                (provider_instance_id, int(folder_id), max(1, int(limit))),
+            ).fetchall()
+        return [
+            {"asset_id": r[0], "relative_managed_path": r[1],
+             "media_type": r[2], "size_bytes": r[3], "content_sha256": r[4]}
+            for r in rows
+        ]
+
+    def sweep_locators(self, provider_instance_id: str,
+                       statuses: tuple[str, ...] = ("ready", "stale",
+                                                    "missing"),
+                       limit: int = 200) -> list[dict]:
+        """Locators due for revalidation (B-12 sweep input): every resolved
+        locator in the given statuses with its stored evidence row."""
+        with self.lock:
+            marks = ",".join("?" for _ in statuses)
+            rows = self._conn.execute(
+                "SELECT l.asset_id, l.provider_file_id, l.status,"
+                " l.last_seen_kind, l.last_seen_name, l.last_seen_mtime,"
+                " l.last_seen_size, l.provider_generation"
+                " FROM provider_locators l"
+                " WHERE l.provider_instance_id=? AND l.status IN (" + marks + ")"
+                " AND l.provider_file_id IS NOT NULL"
+                " ORDER BY l.verified_at IS NULL, l.verified_at, l.rowid"
+                " LIMIT ?",
+                (provider_instance_id, *statuses, max(1, int(limit))),
+            ).fetchall()
+        return [
+            {"asset_id": r[0],
+             "evidence": {"provider_file_id": r[1], "status": r[2],
+                          "last_seen_kind": r[3], "last_seen_name": r[4],
+                          "last_seen_mtime": r[5], "last_seen_size": r[6],
+                          "provider_generation": r[7]}}
+            for r in rows
+        ]
+
+    def all_pending_locators(self, provider_instance_id: str,
+                             limit: int = 200) -> list[dict]:
+        """Every unresolved locator for this provider instance, linked or not
+        (external links from B-07 can be pending; managed imports are pending
+        until the watcher indexes the copy)."""
+        with self.lock:
+            rows = self._conn.execute(
+                "SELECT l.asset_id, l.provider_file_id, l.provider_folder_id,"
+                " l.last_seen_kind, l.last_seen_name, l.last_seen_mtime,"
+                " l.last_seen_size, a.relative_managed_path"
+                " FROM provider_locators l JOIN assets a ON a.asset_id=l.asset_id"
+                " WHERE l.provider_instance_id=? AND l.status='pending'"
+                " ORDER BY l.rowid LIMIT ?",
+                (provider_instance_id, max(1, int(limit))),
+            ).fetchall()
+        return [
+            {"asset_id": r[0], "provider_file_id": r[1],
+             "provider_folder_id": r[2], "last_seen_kind": r[3],
+             "last_seen_name": r[4], "last_seen_mtime": r[5],
+             "last_seen_size": r[6], "relative_managed_path": r[7]}
+            for r in rows
+        ]
+
+    def bind_pending_locator(
+        self, *, asset_id: str, provider_instance_id: str,
+        provider_file_id: int, provider_generation: str | None = None,
+        last_seen_kind: str | None = None, last_seen_name: str | None = None,
+        last_seen_mtime: str | None = None, last_seen_size: int | None = None,
+    ) -> None:
+        """Resolves a PENDING locator to a concrete provider file. This is the
+        ONLY sanctioned write of provider_file_id; D-08 still forbids swapping
+        the file of a RESOLVED locator (docs/11 §4). The partial unique index
+        makes binding to an already-bound file an IntegrityError — never a
+        silent double-bind."""
+        with self.lock:
+            if int(provider_file_id) <= 0:
+                raise StorageError("invalid provider_file_id")
+            now = utc_now()
+            try:
+                with self._conn:
+                    cur = self._conn.execute(
+                        "UPDATE provider_locators SET provider_file_id=?,"
+                        " status='ready', provider_generation=COALESCE(?, provider_generation),"
+                        " last_seen_kind=COALESCE(?, last_seen_kind),"
+                        " last_seen_name=COALESCE(?, last_seen_name),"
+                        " last_seen_mtime=COALESCE(?, last_seen_mtime),"
+                        " last_seen_size=COALESCE(?, last_seen_size),"
+                        " verified_at=?"
+                        " WHERE asset_id=? AND provider_instance_id=?"
+                        " AND status='pending' AND provider_file_id IS NULL",
+                        (int(provider_file_id), provider_generation,
+                         last_seen_kind, last_seen_name, last_seen_mtime,
+                         last_seen_size, now, asset_id, provider_instance_id),
+                    )
+                    if cur.rowcount == 0:
+                        raise StorageError(
+                            "locator not pending (already resolved or gone)")
+            except sqlite3.IntegrityError:
+                raise StorageError("file already bound to another asset") from None
+
     def find_managed_asset_by_hash(self, content_sha256: str) -> dict | None:
         """Managed asset whose stored digest matches (content-addressed dedup,
         B-10). Exact 64-hex only — a malformed digest never matches."""
@@ -461,6 +569,16 @@ class Repository:
             "asset_id": row[0], "relative_managed_path": row[1],
             "media_type": row[2], "size_bytes": row[3],
         }
+
+    def locator_status(self, asset_id: str,
+                       provider_instance_id: str) -> str | None:
+        with self.lock:
+            row = self._conn.execute(
+                "SELECT status FROM provider_locators"
+                " WHERE asset_id=? AND provider_instance_id=?",
+                (asset_id, provider_instance_id),
+            ).fetchone()
+        return row[0] if row else None
 
     def set_locator_status(
         self,
