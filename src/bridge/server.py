@@ -16,6 +16,7 @@ from bridge.errors import BridgeError, error_result
 from bridge.provider import FakeProvider, ProviderPort
 from bridge.repository import Repository
 from bridge.tools_link import LinkResult, UnlinkResult
+from bridge.tools_get import GetAssetResult, get_asset as _get_impl
 from bridge.tools_search import (
     ListMemoryAssetsResult,
     SearchAssetsResult,
@@ -252,6 +253,37 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             source_instance_id=source_instance_id, agent_id=agent_id,
             project_id=project_id, channel=channel,
             memory_ref=memory_ref, limit=limit,
+        )
+
+    # ---- get_asset (B-09): the only media path --------------------------------
+
+    @server.tool(
+        name="get_asset",
+        description=(
+            "Fetch image bytes for ONE linked asset, only when the user "
+            "explicitly asked for the image. Re-validates the provider file, "
+            "enforces size/pixel/MIME bounds, and never substitutes another "
+            "file. Never called automatically by search or listing."
+        ),
+    )
+    def _get_asset(
+        agent_id: str,
+        asset_id: str,
+        project_id: str = "",
+        channel: str = "",
+        source_instance_id: str = "",
+        memory_ref: str | None = None,
+    ) -> object:
+        if ctx.db is None:  # pragma: no cover
+            return GetAssetResult(
+                ok=False, error=error_result("storage_error")["error"]
+            )
+        return _get_impl(
+            provider=ctx.provider, repo=ctx.db,
+            provider_instance_id=ctx.config.provider_instance_id,
+            source_instance_id=source_instance_id, agent_id=agent_id,
+            project_id=project_id, channel=channel,
+            asset_id=asset_id, memory_ref=memory_ref,
         )
 
     return server
