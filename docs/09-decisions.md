@@ -48,3 +48,7 @@ This log separates **approved current facts** from **proposed implementation pol
 ## D-21 — Trusted evidence survives refusals (B-09/B-12, #39)
 
 Demotion to stale/missing/incompatible never refreshes trusted identity columns. Metadata-only revalidation may change status but cannot replace the fetch evidence; a later fetch must still pass its original identity gate. Repeated registration of a resolved locator preserves its evidence. Incompatible remains terminal for get/import failure transitions. No schema migration is needed; rollback restores code only, but cannot repair evidence already overwritten by older versions: operators must explicitly re-establish affected associations.
+
+## D-22 — Independent fetch gates (B-09, #40; supersedes D-20 gate details)
+
+Every fetch checks status, availability, kind, name, generation, size and mtime independently using the decision table in docs/11 §5. Known generation mismatch or name mismatch always refuses; size/mtime edits require known unchanged generation and matching name. Missing generations do not become the string `None` and never grant a waiver. This strengthens fetch only; import/reconcile retain their distinct copy/status purposes and cannot refresh fetch evidence. No API/schema change.

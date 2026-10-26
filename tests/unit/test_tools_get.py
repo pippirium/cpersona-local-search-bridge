@@ -439,3 +439,38 @@ def test_rejected_evidence_survives_retries_revalidation_and_restart(tmp_path):
     assert get(r, prov, aid).error["code"] == "asset_unavailable"
     assert r.asset(aid, P)["locator_status"] == "incompatible"
     r.close()
+
+
+@pytest.mark.parametrize("generation,mtime,size_delta,name,allowed", [
+    (2, "same", 5, "replacement.png", False),
+    (2, "same", 0, "syn.png", False),
+    (None, "same", 5, "syn.png", False),
+    (None, None, 5, "syn.png", False),
+    (None, None, 0, "syn.png", False),
+    (None, "same", 0, "syn.png", True),
+    (1, "same", 5, "syn.png", True),
+    (1, None, 5, "syn.png", True),
+    (1, "same", 0, "replacement.png", False),
+])
+def test_fetch_identity_dimensions_independent(repo, generation, mtime,
+                                                size_delta, name, allowed):
+    from mcp.server.mcpserver.utilities.types import Image
+
+    prov = FakeProvider(files={1: png_file()})
+    aid = make_link(repo, prov, provider_generation="1")
+    original = repo.asset(aid, P)
+    prov.generation = generation
+    if mtime != "same":
+        prov.files[1].mtime = mtime
+    prov.files[1].size += size_delta
+    prov.files[1].name = name
+    for _ in range(3):
+        result = get(repo, prov, aid)
+        if allowed:
+            assert isinstance(result, Image)
+        else:
+            assert result.error["code"] == "asset_unavailable"
+            for key in ("last_seen_mtime", "last_seen_size", "last_seen_name"):
+                assert repo.asset(aid, P)[key] == original[key]
+    if not allowed:
+        assert not [c for c in prov.calls if c[0] == "content"]
