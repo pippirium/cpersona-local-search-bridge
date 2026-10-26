@@ -4,7 +4,7 @@
 
 > **Status: 開発版（0.0.0）。stdio MCP・9ツール実装済み、未リリース。**
 >
-> M0〜M2の実装とオフライン検証、評価CLI・運用手順があります。実モデルの品質数値、fresh Mac導入、実CPersonaを含む3プロセス結合は未検証です。安全性修正 #39〜#43 と検証条件は[決定記録](docs/09-decisions.md)を参照してください。実装済みはリリース承認・安全性の無条件保証を意味しません。
+> M0〜M2の実装とオフライン検証、評価CLI・運用手順があります。実モデルの品質数値とfresh Mac導入は未検証です。実CPersonaを含む3プロセス試験は[docs/16](docs/16-three-process-acceptance.md)で合成画像・fake embedderによる成功を記録しています。安全性修正 #39〜#43 と検証条件は[決定記録](docs/09-decisions.md)を参照してください。実装済みはリリース承認・安全性の無条件保証を意味しません。
 
 ## 目的と背景
 
@@ -45,7 +45,7 @@ flowchart LR
 | 同じファイルの重複関連付けと再起動時の永続化 | M1 | 実装済み・合成テスト |
 | 明示指定した索引済み画像を管理folderへコピーする | M2 | 実装済み・opt-in |
 | 索引再構築・移動・消失時の照合・状態監査 | M2 | 実装済み・同一性不明なら取得不可 |
-| 結合検査・LLM不要の評価CLI | M3 | 実装済み・実provider監査はfake embedder。3プロセス・実モデル品質は未検証 |
+| 結合検査・LLM不要の評価CLI | M3 | 実装済み・実provider監査はfake embedder。3プロセスはdocs/16で検証、実モデル品質は未検証 |
 
 公開リポジトリのコードに秘密鍵・個人の会話ログ・画像・ローカル絶対パスを含めないでください。既存のlocal-searchは個人用途のプロジェクトであり、本リポジトリはその内部実装を複製せず**既存HTTP API**経由で接続します。
 
@@ -79,6 +79,7 @@ flowchart LR
 | [12 — 脅威モデル・メディア方針](docs/12-threat-model-media-policy.md) | B-03確定事項: 信頼境界・T-01〜T-15負例表・取得上限（8MB/40MP/JPEG,PNG,WebP,GIF）・HTTPクライアント規則・ログ秘匿監査 |
 | [13 — LS-01 locator監査](docs/13-ls01-locator-audit.md) | reindex/move/消失/rowid再利用でのfile_id耐久性とsearch folder_id制約の結論（**local-search変更不要**・制限は明記） |
 | [15 — B-13 実provider監査ログ](docs/15-b13-live-audit-log.md) | 実local-search(31f31048)で実測した耐久・404・rebuildスワップ・在庫route訂正の証跡（eval/README.md と併読） |
+| [16 — 3プロセス受入試験](docs/16-three-process-acceptance.md) | 実CPersona・Bridge stdioプロセスと隔離local-searchの合成画像フロー（fake embedder、品質評価ではない） |
 | [RUNBOOK](operations/RUNBOOK.md) | インストール・MCP登録・pin表・backup/restore・rebuild対応・診断・プライバシー点検・既知の限界 |
 | [RELEASE-CHECKLIST](operations/RELEASE-CHECKLIST.md) | リリースゲート（実測記録・運用リハ・セキュリティ・文書誠実性） |
 | [14 — CP-01 ユーザー導線](docs/14-cp01-asset-workflow.md) | 記憶ref→link→表示の運用フロー・本文トレーラ形式 `[asset:<uuid4>]`・合成運用サンプル（**CPersona fork変更なし**で成立） |
@@ -89,7 +90,7 @@ flowchart LR
 - **M0 — 契約と設計の確定:** ✅ 完了（B-01〜B-03, LS-01。docs/10・docs/13）
 - **M1 — 最小MCPアダプター:** ✅ 完了（B-04〜B-09。healthを含む6ツール）
 - **M2 — ファイル取り込み・運用:** ✅ 完了（B-10〜B-12, CP-01。管理コピー・pending解決・状態機械・監査。計9ツール）
-- **M3 — 結合評価:** 🔄 進行中（B-13監査・B-14 eval CLI・B-15 runbookはmainへマージ済み。3プロセス結合・実モデル評価・CP-02は未完了）
+- **M3 — 結合評価:** 🔄 進行中（B-13監査・B-14 eval CLI・B-15 runbookはmainへマージ済み。3プロセス結合はdocs/16で検証済み。実モデル評価・CP-02は未完了）
 
 GitHub Issueは**Bridgeで全体を統括**し、他リポジトリへの変更が本当に必要なときだけ別途承認を得て作業します。CPersona側のfork policyに従い、[Cloto-dev/CPersona](https://github.com/Cloto-dev/CPersona)へのpushやPRは行いません。
 
@@ -114,11 +115,10 @@ MCPクライアント登録例（stdio）と環境変数表は **[operations/RUN
 
 ## 現在の状態と制約
 
-MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は301 passed / 4 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
+MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は301 passed / 5 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
 
 - **実EmbeddingGemmaでの検索品質数値**（evalはfake embedderで配管検証のみ実施。数値の転記禁止はdocs/07・[eval/README.md](eval/README.md)）
 - **工場出荷状態のMacでのインストール手順実演**（RUNBOOK §1に[fresh-Mac unverified]表記）
-- **実CPersona・Bridge・local-searchの3プロセス結合**（docs/15は実HTTP provider＋合成MCP配線、CPersonaは契約fixture）
 - **CP-02の独立モデル比較**（#19。別リポジトリ作業の個別承認が必要）
 - 自動スケジューラは存在しない（resolve/auditは明示実行のみ=docs/03 §7の設計）
 

@@ -68,3 +68,7 @@ Reusing a managed digest adds only an idempotent scoped link. Existing locator i
 ## D-26 — Current documentation and historical evidence (B-15, #44)
 
 README and docs/04 describe current development runtime, docs/06 preserves original acceptance scope, and GitHub issue states/merged PRs track delivery. Historical D-IDs/audit runs remain labeled historical and cannot prove later fixes or unexecuted full integration. Corrected startup requires explicit src on PYTHONPATH; pytest configuration does not configure server startup. No release, real-model quality, fresh-Mac install or real CPersona three-process success is claimed. External MCP link generation capture remains absent, conservatively disabling its edit waiver.
+
+## D-27 — Real three-process smoke is opt-in and isolated (B-13, #20)
+
+`tests/integration/test_three_process.py` launches a real fork stdio process, a separate Bridge stdio process and a dedicated loopback provider child. Only generated media and temporary databases are used. Explicit executable environment variables are required; default offline tests skip it. CPersona embeddings are disabled and the provider uses its documented fake embedder, so docs/16 establishes integration correctness without claiming semantic quality. No external repository modifications or live service/config changes.
