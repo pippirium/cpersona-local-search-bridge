@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from bridge.errors import BridgeError, error_result
 from bridge.provider import ProviderPort
 from bridge.repository import Repository
+from bridge.statemachine import apply_transition
 
 import bridge_policy
 
@@ -211,28 +212,66 @@ def get_asset(
                 pass
             return fail("asset_unavailable", aid=asset_id)
 
-        # Evidence drift check (docs/13): if BOTH stored size and mtime exist
-        # and the provider now serves different ones, the stored mapping no
-        # longer describes this exact file version. We keep the file_id (the
-        # identity survives reindexing) but the *stored evidence* must refresh;
-        # content is only refused when identity itself broke — kind already
-        # checked above; drift alone refreshes evidence and proceeds because
-        # the provider still serves THE file (docs/13 verdict: id durable).
-        drifted = bool(
-            (
-                asset.get("last_seen_size") is not None
-                and detail.get("size") is not None
-                and asset["last_seen_size"] != detail["size"]
-            )
-            or (
-                asset.get("last_seen_mtime") is not None
-                and detail.get("mtime") is not None
-                and asset["last_seen_mtime"] != detail["mtime"]
-            )
-        )
-        # `drifted` is intentionally not a refusal condition (see the note
-        # above); gate 8 refreshes the stored evidence unconditionally, so a
-        # drift merely means that write changes values.
+        # ---- gate 3b: full evidence conflict (docs/11 §5 frozen set) ---------
+        # docs/11 §5 item 3 is a CONJUNCTION: mtime must match, OR the
+        # generation must be unchanged AND name/rel_dir must match. A
+        # mismatch with no waiver available is an evidence conflict =>
+        # stale + refuse. Refusing here is the only defense against provider
+        # rowid reuse (docs/13: a stale id can be handed to a different
+        # file; a different file under the same id passes kind/size gates,
+        # so an mtime/name/rel_dir/generation conflict must never serve
+        # bytes). Measured live (docs/15): rebuild + re-add reuses ids; the
+        # old code served the NEW file's bytes under the OLD asset's id.
+        #
+        # "generation unchanged" means: no rebuild happened between the
+        # stored evidence and this response — bridge_health.generation is
+        # the live authority (audited docs/10 GET /api/status shape). A
+        # locator that never recorded a generation cannot use the waiver
+        # either. A status probe that fails CANNOT grant the waiver
+        # (unknown never widens trust — the rule the B-13 fix established).
+        # mtime/name are compared as stored strings (docs/11 §6: provider
+        # data is evidence, never re-parsed). rel_dir: the locator table
+        # stores no rel_dir (docs/11 §3); docs/11 §5 says name/rel_dir, and
+        # the audited name is a path-free display label that the ledger
+        # maintains across renames (docs/13: rename detected via name) — so
+        # name equality stands in for name/rel_dir, a recorded narrowing
+        # written into docs/13, never silently.
+        ev_mtime, live_mtime = (asset.get("last_seen_mtime"),
+                                detail.get("mtime"))
+        if (ev_mtime is not None and live_mtime is not None
+                and str(ev_mtime) != str(live_mtime)):
+            gen_ev = asset.get("provider_generation")
+            try:
+                live_gen = str((provider.status().get("index")
+                                or {}).get("generation"))
+            except BridgeError:
+                live_gen = None
+            same_generation = (gen_ev is not None and live_gen is not None
+                               and str(gen_ev) == live_gen)
+            names_match = (detail.get("name") is not None
+                           and str(detail["name"])
+                           == str(asset.get("last_seen_name")))
+            if not (same_generation and names_match):
+                # truthful transition where the graph admits it; refuse
+                # either way — never bytes for a conflicted mapping.
+                src_status = asset.get("locator_status") or "ready"
+                if src_status != "stale":
+                    try:
+                        apply_transition(
+                            repo, asset_id=asset_id,
+                            provider_instance_id=provider_instance_id,
+                            src=src_status, dst="stale",
+                            last_seen_mtime=live_mtime,
+                            last_seen_size=(None if detail.get("size") is None
+                                            else int(detail["size"])),
+                            last_seen_name=detail.get("name"))
+                    except Exception:
+                        pass  # concurrent/healed verdicts must not mask the refusal
+                return fail("asset_unavailable", aid=asset_id)
+        # Size/mtime drift WITHIN the admitted waiver (same generation, same
+        # name/rel_dir: an indexed edit) is not a refusal condition; gate 8
+        # refreshes the stored evidence, so drift only means the write
+        # changes values.
 
         # ---- gate 4: declared bounds before fetching --------------------------
         declared = detail.get("size")

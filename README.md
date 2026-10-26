@@ -79,34 +79,48 @@ flowchart LR
 | [12 — 脅威モデル・メディア方針](docs/12-threat-model-media-policy.md) | B-03確定事項: 信頼境界・T-01〜T-15負例表・取得上限（8MB/40MP/JPEG,PNG,WebP,GIF）・HTTPクライアント規則・ログ秘匿監査 |
 | [13 — LS-01 locator監査](docs/13-ls01-locator-audit.md) | reindex/move/消失/rowid再利用でのfile_id耐久性とsearch folder_id制約の結論（**local-search変更不要**・制限は明記） |
 | [15 — B-13 実provider監査ログ](docs/15-b13-live-audit-log.md) | 実local-search(31f31048)で実測した耐久・404・rebuildスワップ・在庫route訂正の証跡（eval/README.md と併読） |
+| [RUNBOOK](operations/RUNBOOK.md) | インストール・MCP登録・pin表・backup/restore・rebuild対応・診断・プライバシー点検・既知の限界 |
+| [RELEASE-CHECKLIST](operations/RELEASE-CHECKLIST.md) | リリースゲート（実測記録・運用リハ・セキュリティ・文書誠実性） |
 | [14 — CP-01 ユーザー導線](docs/14-cp01-asset-workflow.md) | 記憶ref→link→表示の運用フロー・本文トレーラ形式 `[asset:<uuid4>]`・合成運用サンプル（**CPersona fork変更なし**で成立） |
 | [AGENTS.md](AGENTS.md) | AIエージェントに求める開発・安全ルール |
 
 ## 実装ロードマップ
 
-- **M0 — 契約と設計の確定:** CPersonaの実際のmemory ID、local-searchの安定したファイル参照、信頼境界を監査。
-- **M1 — 最小MCPアダプター:** 既存画像とのリンク／解除・検索・一覧・明示取得。まずこの段階だけで実用性を確認。
-- **M2 — ファイル取り込み・運用:** オプションの管理コピー、索引待ち、破損・切断・再索引への復旧。
-- **M3 — 結合評価:** 実サービス同士の統合テスト、画像横断検索のベンチマーク、手順書と安全性レビュー。
+- **M0 — 契約と設計の確定:** ✅ 完了（B-01〜B-03, LS-01。docs/10・docs/13）
+- **M1 — 最小MCPアダプター:** ✅ 完了（B-04〜B-09。link/unlink/search/list/get の5ツール）
+- **M2 — ファイル取り込み・運用:** ✅ 完了（B-10〜B-12, CP-01。管理コピー・pending解決・状態機械・監査。計9ツール）
+- **M3 — 結合評価:** 🔄 進行中（B-13実測監査・B-14 eval CLI・B-15 runbook=PR作成済み。実モデル評価は未測定として記録）
 
 GitHub Issueは**Bridgeで全体を統括**し、他リポジトリへの変更が本当に必要なときだけ別途承認を得て作業します。CPersona側のfork policyに従い、[Cloto-dev/CPersona](https://github.com/Cloto-dev/CPersona)へのpushやPRは行いません。
 
-## 想定開発環境（将来）
+## 開発環境と起動
 
-- Python 3.12、uv、MCP Python SDK、SQLite標準ライブラリ、ローカルHTTPクライアント
-- Apple Silicon Mac上に起動済みのlocal-search。モデル推論・LanceDBはlocal-searchが担当
-- テストはFake HTTP providerと一時SQLiteを使ってネット接続なしで完結
-- 実モデルの速度評価は任意の隔離データセットで明示的に実行
+- Python 3.12（uv管理）、MCP Python SDK 2.x、httpx、SQLite標準ライブラリ
+- local-search が loopback で起動済みであること（モデル推論・索引はlocal-searchの管轄）
+- テストはFake HTTP providerと一時SQLiteでネット接続なしに完結（`uv run pytest`）
+- 実providerに対する契約tripwireとスモークはオプトイン（[RUNBOOK](operations/RUNBOOK.md) §6）
 
-**現在、Bridgeを起動するインストールコマンドはありません。** M1実装後に、正確な環境構築コマンドとMCP登録例を追記します。
+インストールとMCP登録:
+
+```sh
+uv sync
+```
+
+MCPクライアント登録例（stdio）と環境変数表は **[operations/RUNBOOK.md](operations/RUNBOOK.md) §1〜§3**。起動は `uv run python -m bridge.server`（`PYTHONPATH=src`）。
 
 ## 開発の進め方
 
 [AGENTS.md](AGENTS.md)と[チケット仕様](docs/06-tickets.md)に沿ってIssue単位で実装し、独立した論理変更ごとに詳細なコミットメッセージとCo-authored-by表記を残します。PRにはテスト結果、互換性、リスクとロールバックを記載します。既存のユーザーデータへの書き込みや別リポジトリへのpushは、対象の承認なしには行いません。
 
-## 現在の制約
+## 現在の状態と制約
 
-このリポジトリは現時点で**仕様と実装計画のみ**です。画像取り込み、ファイル検索、MCP連携、モデル比較の実装や動作保証はまだありません。LLM不要の検索品質評価は可能な設計ですが、実測結果を出すまでスコアは未測定として扱います。
+MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest`（254 passed、main基準）で回帰保証されています。未測定として正直に記録しているもの:
+
+- **実EmbeddingGemmaでの検索品質数値**（evalはfake embedderで配管検証のみ実施。数値の転記禁止はdocs/07・[eval/README.md](eval/README.md)）
+- **工場出荷状態のMacでのインストール手順実演**（RUNBOOK §1に[fresh-Mac unverified]表記）
+- 自動スケジューラは存在しない（resolve/auditは明示実行のみ=docs/03 §7の設計）
+
+信頼境界: ローカルオペレーター＋stdioトランスポート。`agent_id`等のスコープ引数は**認証ではない**（docs/03 §6）。local-searchのファイル消失は「取得不可」であって別ファイルを返す許可ではない（AGENTS.md不変条件）。
 
 ## ライセンス
 

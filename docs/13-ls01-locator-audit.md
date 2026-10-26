@@ -51,3 +51,47 @@ Consequently, **LS-01 closes as "変更不要" (no provider modification)**. No 
 - Method: static source audit at the pinned SHA + fixture modeling in this repo (`fixtures/contracts/local-search/*`). No live calls (provider stopped at audit time; none claimed).
 - Executable regression: `tests/contract/test_local_search_contract.py` + `tests/unit/test_schema_contract.py` pin the consumed shapes and the locator lifecycle the table above implies; `docs/11` §4 is the state graph B-12 will implement.
 - The reindex scenario itself (real rebuild on a disposable corpus) is exercised in **B-13**'s isolated three-process test, not here; this document does not claim it ran.
+
+## Correction (B-15 live drill, pinned 31f3104, real embedder off / fake on)
+
+Rehearsing the release checklist's rebuild drill **materialized the residual
+risk above into an actual wrong-file return**: delete the source of a linked
+file → `POST /api/index/rebuild` → drop a *different* PNG (different size)
+into the watched folder → the new file received the **same `file_id`**
+(rowid reuse across a generation switch, measured twice). The old `get_asset`
+served the NEW file's bytes under the OLD asset id, because its drift check
+treated size/mtime mismatch as "refresh and proceed", and neither audit nor
+reconcile flagged it: `verdict_from_detail` ignores mtime, and the reused
+row's size/kind/availability happened to satisfy every stored check at fetch
+time.
+
+Fixed in `get_asset` as **gate 3b**, faithful to docs/11 §5 item 3, with two
+recorded narrowings:
+
+1. **rel_dir**: §5 says "name/rel_dir match", but the locator table stores no
+   rel_dir (docs/11 §3) and adding one is a schema change out of B-15 scope.
+   The audited `name` (path-free display label, ledger-renamed values are
+   observable drift) stands in for name/rel_dir. Narrowing recorded here,
+   not silently.
+2. **"generation unchanged"** reads the LIVE authority (`GET /api/status`
+   `index.generation`) against the stored `provider_generation`: a rebuild
+   kills the waiver; a missing stored generation or a failed probe CANNOT
+   grant it (unknown never widens trust). The extra status GET runs only on
+   the mtime-drifted path.
+
+mtime/name compared as stored strings (docs/11 §6). Refusal is
+`asset_unavailable` + a truthful `stale` transition where the graph admits
+it; the ordinary all-match path is untouched (zero added requests). Unit
+coverage: waiver serves (gen ok + name match), refuses on generation switch,
+name drift, unknown stored generation, failed probe; plus the live drill
+script re-run end-to-end: **`get_asset` now refuses the reused id** where
+before the fix it returned the wrong image.
+
+`audit`/`reconcile` remain mtime-blind **by contract** — §5's waiver exists
+for exactly the indexed-edit case and a state machine cannot consult live
+generation per row without an N-request sweep; the wrong-file defense lives
+where bytes are handed out (explicit get_asset), which is where docs/08
+already concentrates media risk. The B-15 drill's audit verdict (`ready`→
+nothing) is therefore CORRECT, and the old docs/13 claim "the evidence set
+detects… swap-with-different-file" was true only of this fetch-time gate
+once built: this paragraph replaces that overclaim.

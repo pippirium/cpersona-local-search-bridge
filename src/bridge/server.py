@@ -423,3 +423,6 @@ def main() -> None:  # pragma: no cover - process entrypoint
         create_server(ctx).run(transport="stdio")
     finally:
         provider.close()
+
+if __name__ == "__main__":
+    main()  # pragma: no cover - process entrypoint
