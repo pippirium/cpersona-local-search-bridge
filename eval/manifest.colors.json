@@ -1,0 +1,255 @@
+{
+  "fixtures": [
+    {
+      "id": "color-red",
+      "generator": "png_solid",
+      "width": 96,
+      "height": 96,
+      "rgb": [
+        220,
+        30,
+        30
+      ]
+    },
+    {
+      "id": "color-green",
+      "generator": "png_solid",
+      "width": 96,
+      "height": 96,
+      "rgb": [
+        30,
+        200,
+        30
+      ]
+    },
+    {
+      "id": "color-blue",
+      "generator": "png_solid",
+      "width": 96,
+      "height": 96,
+      "rgb": [
+        30,
+        30,
+        220
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "t2i-red-ja",
+      "task": "text_to_image",
+      "query": {
+        "text": "赤一色の画像"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-red",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "t2i-red-en",
+      "task": "text_to_image",
+      "query": {
+        "text": "a solid red image"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-red",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "m2i-red",
+      "task": "memory_to_image",
+      "query": {
+        "memory_ref": "mem:9101"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-red",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "i2i-red",
+      "task": "image_to_image",
+      "query": {
+        "fixture": "color-red"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-red",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "t2i-green-ja",
+      "task": "text_to_image",
+      "query": {
+        "text": "緑一色の画像"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-green",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "t2i-green-en",
+      "task": "text_to_image",
+      "query": {
+        "text": "a solid green image"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-green",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "m2i-green",
+      "task": "memory_to_image",
+      "query": {
+        "memory_ref": "mem:9102"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-green",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "i2i-green",
+      "task": "image_to_image",
+      "query": {
+        "fixture": "color-green"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-green",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "t2i-blue-ja",
+      "task": "text_to_image",
+      "query": {
+        "text": "青一色の画像"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-blue",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "t2i-blue-en",
+      "task": "text_to_image",
+      "query": {
+        "text": "a solid blue image"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-blue",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "m2i-blue",
+      "task": "memory_to_image",
+      "query": {
+        "memory_ref": "mem:9103"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-blue",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "id": "i2i-blue",
+      "task": "image_to_image",
+      "query": {
+        "fixture": "color-blue"
+      },
+      "scope": {
+        "agent_id": "eval",
+        "project_id": "colors",
+        "channel": "synthetic"
+      },
+      "relevant": [
+        {
+          "asset_ref": "color-blue",
+          "grade": 3
+        }
+      ]
+    }
+  ]
+}
