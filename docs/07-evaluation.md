@@ -6,7 +6,7 @@ The bridge does not need GPT-4.1-mini, GPT-4o-mini or any other generation LLM t
 ## Three independent evaluation tracks
 | Track | What it measures | Data and outputs | Generation LLM? |
 | --- | --- | --- | --- |
-| A: Embedding model | Jina v5-text-nano vs EmbeddingGemma 2; add BGE-M3 if baseline pinned | Same labeled records/questions, Recall@1/5/10, MRR@10, NDCG@10, vector/runtime metrics | No |
+| A: Embedding model | Jina v5-text-nano, BGE-M3 and EmbeddingGemma 2 at fixed revisions | Japanese smoke plus pinned full LMEB tasks; Recall@1/5/10, Success@10, MRR@10, NDCG@10, per-query latency/resource metrics, model-specific prompts/instructions | No |
 | B: CPersona end-to-end retrieval | CPersona's text indexing, hybrid recall and reconstruct inputs with substituted embeddings | Same memory corpus, query set, gate settings and answer-bearing IDs | No, unless separately testing final generated answers |
 | C: Bridge asset retrieval | Text→image, image→image, remembered memory→linked asset, explicit media resolution | Labeled image paths and memory↔asset pairs, hit@1, Recall@10, NDCG@10, p50/p95, bytes returned | No |
 

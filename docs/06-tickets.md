@@ -356,6 +356,8 @@ fork固有のsetup/contract testと運用サンプル。
 
 既存poc/embeddingのJina対Gemma smokeを出発点に、同じ日本語/LMEBデータ、同じ検索条件、固定モデルrevisionでBGE-M3も比較。Prompt役割、dtype、index再作成を考慮。
 
+LMEBは固定した単一のSciFact taskに止めず、公開22 dataset / 193 taskすべてをPhase 2で実行する。日本語PoC smokeと各LMEB taskは別集計し、LMEB公式のmodel別instruction設定とdataset/task集計を記録する。
+
 **Acceptance criteria**
 
 Recall/NDCG/MRR・速度・利用リソースのper-query記録。LoCoMo最終回答正答率と検索指標を混同しない。モデル未計測値は表に書かない。上流・本番DBは変更しない。

@@ -43,7 +43,7 @@ This log separates **approved current facts** from **proposed implementation pol
 ## Change control
 - Record new D-IDs when contract, security, data retention or scope changes. Update requirements/architecture/API/tickets in the same PR.
 - Do not assert completion without tests and a recorded acceptance run.
-- The user has authorized this initial plan/README PR and **Squash Merge**. This does not authorize future implementation changes to CPersona or local-search.
+- The user authorized the initial plan/README PR and squash merge. The user has now separately authorized CP-02 implementation, evaluation, PR and merge in the experimental `pippirium/CPersona` fork. No permission was given to modify local-search or push to `Cloto-dev/CPersona`.
 
 ## D-21 — Trusted evidence survives refusals (B-09/B-12, #39)
 
@@ -80,7 +80,7 @@ A predeclared 12-query, three-image RGB manifest was run against pinned real Emb
 
 ## D-29 — CP-02 preparation is an isolated evaluation track (#19)
 
-Before inference, freeze the full published LMEB_SciFact test and existing Japanese PoC sample, three immutable model revisions, prompts, common MPS/bf16/sequence/batch conditions and paired metrics in docs/18. This standalone evaluation does not add an embedder to the MCP runtime, use live data or alter another repository. Record dataset-bounded conclusions; the required CPersona-fork PR remains subject to separate authorization and is not replaced by Bridge preparation.
+Before inference, freeze the published LMEB_SciFact test, existing Japanese PoC sample, three immutable model revisions, prompts, common MPS/bf16/sequence/batch conditions and paired metrics in docs/18. This standalone evaluation does not add an embedder to the MCP runtime, use live data or alter another repository. The user permits PR creation in the experimental CPersona fork; this handoff is branch-push only and creates no PR.
 
 ## D-30 — Explicit unlinked-image ownership and input contract (IMG-01, #55)
 
@@ -93,7 +93,6 @@ MCP SDK typed result serialization includes unused optional fields as JSON null.
 ## D-32 — Scoped, read-only status observation (IMG-04, #58)
 
 Status reads perform bounded provider and managed-copy checks without writing the locator or invoking the global resolver. A freshly observed identity failure, deletion or index conflict is reported as stale, missing or incompatible even if the stored state has not changed. Provider outages preserve the stored status but set indexed false and supply a retryable reason. checked_at remains the last stored verification time, not the time of this read. Resolution of new owned assets captures the provider index generation after confirming it remains unchanged across the identity checks; missing or changing generation leaves the asset pending.
-
 ## D-33 — Explicit local staging handoff (IMG-03, #57)
 
 The operator configures separate private staging and permitted source roots,
@@ -106,3 +105,7 @@ Source reads use no-follow descriptors, an advisory shared lock and unchanged
 file identity checks. A non-cooperating process can still modify an original
 after selection; the copied image is a validated snapshot, not a claim of
 exclusive control over the source.
+
+## D-34 — CP-02 expands to all published LMEB datasets
+
+The user authorized CP-02 evaluation work and permits PR creation in the experimental CPersona fork; merge was not authorized. CP-02 Phase 2 therefore covers all 22 datasets, 193 retrieval tasks and 103 corpus groups from one immutable LMEB revision. Before any full-model inference, preregister source normalization, published candidate-scene scope, per-model task-instruction settings, missing-qrel handling, the shared Mac/MPS/bf16/512-token/query-batch-8 condition, separate batch-one latency sampling and the official equal-dataset/equal-memory-type macro aggregation in docs/18 and the fork protocol. Preserve every positive source qrel in quality denominators; report source gaps instead of dropping them. This is dense retrieval, not Track B answer accuracy, Japanese general quality or a CPersona runtime change. No upstream or local-search change is authorized.
