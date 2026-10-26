@@ -354,3 +354,25 @@ def test_concurrent_upsert_same_file_id_one_winner(repo):
     assert total == 6  # distinct file ids: every racer owns its own locator
     assert not other_errors, other_errors
     assert not storage_errors
+
+
+def test_resolved_locator_cannot_be_initialized_or_demoted_to_pending(repo):
+    aid = add_external(repo, file_id=10)
+    before = repo.asset(aid, PROVIDER)
+    with pytest.raises(StorageError):
+        repo.set_locator_status(asset_id=aid, provider_instance_id=PROVIDER,
+                                status="pending")
+    with pytest.raises(StorageError):
+        repo.upsert_asset_with_locator(
+            asset_id=aid, origin="external", media_kind="image",
+            provider_instance_id=PROVIDER, provider_file_id=10,
+            status="pending")
+    # A NULL-id initialization conflict is a no-op for the existing locator.
+    repo.upsert_asset_with_locator(
+        asset_id=aid, origin="external", media_kind="image",
+        provider_instance_id=PROVIDER, provider_file_id=None,
+        status="pending")
+    after = repo.asset(aid, PROVIDER)
+    for field in ("provider_file_id", "locator_status", "provider_generation",
+                  "last_seen_size", "last_seen_name", "last_seen_mtime"):
+        assert after[field] == before[field]

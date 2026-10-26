@@ -338,8 +338,8 @@ class Repository:
                 raise StorageError("invalid asset_id")
             if status not in LOCATOR_STATUSES:
                 raise StorageError("invalid locator status")
-            if provider_file_id is None and status != "pending":
-                raise StorageError("locator without provider_file_id must be pending")
+            if (provider_file_id is None) != (status == "pending"):
+                raise StorageError("pending and unresolved locator must coincide")
             now = utc_now()
             # Integrity conflicts (a provider file already bound to another
             # asset) become StorageError so callers never see raw SQL text; the
@@ -381,9 +381,8 @@ class Repository:
                     else:
                         # B-10: a managed import creates a pending locator with
                         # provider_file_id NULL but folder evidence set (the
-                        # folder the copy landed in). Evidence columns update on
-                        # conflict; provider_file_id still does not exist here
-                        # at all (docs/11 §3: NULL only while pending).
+                        # folder the copy landed in). Existing locators are
+                        # reused without modifying state or identity evidence.
                         self._conn.execute(
                             "INSERT INTO provider_locators (asset_id,"
                             " provider_instance_id, provider_generation,"
@@ -392,18 +391,7 @@ class Repository:
                             " verified_at)"
                             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                             " ON CONFLICT (asset_id, provider_instance_id)"
-                            " DO UPDATE SET"
-                            " provider_generation=excluded.provider_generation,"
-                            " provider_folder_id=COALESCE("
-                            " excluded.provider_folder_id,"
-                            " provider_locators.provider_folder_id),"
-                            " last_seen_kind=COALESCE(excluded.last_seen_kind,"
-                            " provider_locators.last_seen_kind),"
-                            " last_seen_name=excluded.last_seen_name,"
-                            " last_seen_size=COALESCE(excluded.last_seen_size,"
-                            " provider_locators.last_seen_size),"
-                            " status=excluded.status,"
-                            " verified_at=excluded.verified_at",
+                            " DO NOTHING",
                             (asset_id, provider_instance_id, provider_generation,
                              provider_folder_id, last_seen_kind, last_seen_name,
                              last_seen_size, status, now),
@@ -600,6 +588,14 @@ class Repository:
         with self.lock:
             if status not in LOCATOR_STATUSES:
                 raise StorageError("invalid locator status")
+            if status == "pending":
+                row = self._conn.execute(
+                    "SELECT provider_file_id FROM provider_locators"
+                    " WHERE asset_id=? AND provider_instance_id=?",
+                    (asset_id, provider_instance_id),
+                ).fetchone()
+                if row is not None and row[0] is not None:
+                    raise StorageError("resolved locator cannot become pending")
             # Rejected observations must never become trusted identity evidence.
             if status != "ready":
                 provider_generation = last_seen_mtime = last_seen_size = last_seen_name = None
