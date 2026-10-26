@@ -116,7 +116,7 @@ MCPクライアント登録例（stdio）と環境変数表は **[operations/RUN
 
 ## 現在の状態と制約
 
-MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は301 passed / 5 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
+MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は303 passed / 5 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
 
 - **一般的な実画像に対する検索品質・モデル間比較**（docs/17は実EmbeddingGemmaで合成色画像12クエリを測定した限定probe。数値の転記禁止はdocs/07・[eval/README.md](eval/README.md)）
 - **工場出荷状態のMacでのインストール手順実演**（RUNBOOK §1に[fresh-Mac unverified]表記）

@@ -298,3 +298,52 @@ def test_register_asset_wire(tmp_path):
 
     anyio.run(go)
     repo.close()
+
+
+@pytest.mark.parametrize("initial_status", ["ready", "incompatible"])
+def test_import_refusal_cannot_poison_get_evidence_after_restart(tmp_path, initial_status):
+    from bridge.audit import reconcile
+    from bridge.tools_get import get_asset
+    from bridge.tools_link import link_asset
+    from mcp.server.mcpserver.utilities.types import Image
+
+    config = cfg(tmp_path)
+    repo = Repository(open_repository(config.data_dir))
+    original_file = FakeFile(file_id=5, name="original.png", content=PNG,
+                             size=len(PNG), mime="image/png")
+    prov = FakeProvider(files={5: original_file})
+    ext = link_asset(provider=prov, repo=repo, provider_instance_id=P,
+                     memory_ref="mem:1", provider_file_id=5, **SCOPE)
+    if initial_status == "incompatible":
+        repo.set_locator_status(asset_id=ext.asset_id,
+                                provider_instance_id=P, status=initial_status)
+    original = repo.asset(ext.asset_id, P)
+    prov.files[5] = FakeFile(file_id=5, name="replacement.png", content=PNG2,
+                            size=len(PNG2), mime="image/png")
+    try:
+        for attempt in range(3):
+            if attempt == 1:
+                repo.close()
+                repo = Repository(open_repository(config.data_dir))
+            rejected = reg(repo, prov, config, memory_ref="mem:2")
+            assert rejected.error["code"] == "asset_unavailable"
+            reconcile(provider=prov, repo=repo, config=config, apply=True)
+            rejected_get = get_asset(provider=prov, repo=repo,
+                                     provider_instance_id=P,
+                                     asset_id=ext.asset_id, **SCOPE)
+            assert rejected_get.error["code"] == "asset_unavailable"
+            for key in ("provider_file_id", "provider_generation", "last_seen_kind",
+                        "last_seen_name", "last_seen_size", "last_seen_mtime"):
+                assert repo.asset(ext.asset_id, P)[key] == original[key]
+        assert not [c for c in prov.calls if c[0] == "content"]
+        assert not repo._conn.execute("SELECT 1 FROM assets WHERE origin='managed'").fetchall()
+        prov.files[5] = original_file
+        recovered = get_asset(provider=prov, repo=repo,
+                              provider_instance_id=P, asset_id=ext.asset_id, **SCOPE)
+        if initial_status == "incompatible":
+            assert recovered.error["code"] == "asset_unavailable"
+            assert repo.asset(ext.asset_id, P)["locator_status"] == "incompatible"
+        else:
+            assert isinstance(recovered, Image) and recovered.data == PNG
+    finally:
+        repo.close()
