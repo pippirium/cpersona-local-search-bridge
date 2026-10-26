@@ -68,3 +68,12 @@ Reusing a managed digest adds only an idempotent scoped link. Existing locator i
 ## D-26 — Current documentation and historical evidence (B-15, #44)
 
 README and docs/04 describe current development runtime, docs/06 preserves original acceptance scope, and GitHub issue states/merged PRs track delivery. Historical D-IDs/audit runs remain labeled historical and cannot prove later fixes or unexecuted full integration. Corrected startup requires explicit src on PYTHONPATH; pytest configuration does not configure server startup. No release, real-model quality, fresh-Mac install or real CPersona three-process success is claimed. External MCP link generation capture remains absent, conservatively disabling its edit waiver.
+
+## D-27 — Real three-process smoke is opt-in and isolated (B-13, #20)
+
+`tests/integration/test_three_process.py` launches a real fork stdio process, a separate Bridge stdio process and a dedicated loopback provider child. Only generated media and temporary databases are used. Explicit executable environment variables are required; default offline tests skip it. CPersona embeddings are disabled and the provider uses its documented fake embedder, so docs/16 establishes integration correctness without claiming semantic quality. No external repository modifications or live service/config changes.
+
+
+## D-28 — Real-model probe evidence stays dataset-bounded (B-14, #20)
+
+A predeclared 12-query, three-image RGB manifest was run against pinned real EmbeddingGemma 2 in an isolated provider (docs/17). Commit per-query output and model/manifest fingerprints without private paths, rather than promoting fake scores or this trivial probe to general-quality/model-comparison claims. Report priming/cache limitations and missing cold/resource baselines explicitly. The schema's leading comment becomes standard `$comment`, with no semantic/version change. No provider source or live data/config modifications.

@@ -1,6 +1,6 @@
 # 04 — Implemented MCP interface contracts (development 0.0.0)
 
-Runtime source: [server.py](../src/bridge/server.py); typed results are in tools_link/tools_search/tools_get/tools_import, reconcile and audit. The nine tools below are registered on local stdio. These are implemented interfaces, not a release or full three-process validation claim. [README](../README.md) records current evidence and unverified gates.
+Runtime source: [server.py](../src/bridge/server.py); typed results are in tools_link/tools_search/tools_get/tools_import, reconcile and audit. The nine tools below are registered on local stdio. These are implemented interfaces, not a release certification; the isolated three-process smoke is recorded separately in docs/16. [README](../README.md) records current evidence and unverified gates.
 
 ## General rules
 
