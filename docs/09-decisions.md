@@ -60,3 +60,7 @@ Size alone never identifies a managed copy. Listing and fresh detail must agree 
 ## D-24 — Inventory completeness belongs to the raw page (B-06/B-11, #42)
 
 Client-side folder filtering must retain raw_count and truncated in FolderInventory. Resolver never infers completeness from filtered item count; a full effective recent page always waits/page_full. Provider's 100-item cap cannot be bypassed with a larger limit. Internal adapter contract changes only; no HTTP API or database migration.
+
+## D-25 — Deduplicated import preserves locator state (B-10/B-11, #43)
+
+Reusing a managed digest adds only an idempotent scoped link. Existing locator identity, status and verification timestamp survive unchanged; response reports the actual status, including stale/missing/incompatible. Only a new provider locator is initialized pending. Repository initialization conflicts preserve locators, and pending with a resolved file ID is rejected. No schema migration: existing inconsistent rows from older versions need explicit operator review, not automatic rebinding or evidence reset. Code rollback is a revert; metadata backup/restore follows RUNBOOK.

@@ -408,3 +408,37 @@ def test_http_recent_completeness_reaches_resolver(env, raw_count, managed_count
         assert repo.locator_status(aid, P) == "pending"
     else:
         assert rep.bound == [{"asset_id": aid, "file_id": 900}]
+
+
+@pytest.mark.parametrize("status", ["pending", "ready", "stale", "missing", "incompatible"])
+def test_duplicate_import_preserves_locator_and_links_after_restart(tmp_path, status):
+    from bridge.tools_get import get_asset
+    from mcp.server.mcpserver.utilities.types import Image
+
+    repo, prov, config = make_env(tmp_path)
+    aid = imported(repo, prov, config)
+    if status != "pending":
+        provider_sees_copy(prov, repo.asset(aid, P))
+        prov.files[900].content = PNG
+        resolve_pending(provider=prov, repo=repo, config=config)
+        if status != "ready":
+            repo.set_locator_status(asset_id=aid, provider_instance_id=P, status=status)
+    before = repo.asset(aid, P)
+    for memory in ("mem:2", "mem:2", "mem:1"):
+        result = register_asset(provider=prov, repo=repo, config=config,
+                                memory_ref=memory, provider_file_id=5, **SCOPE)
+        assert result.ok and result.deduplicated
+        assert result.asset_id == aid and result.link_status == status
+        assert repo.asset(aid, P) == before
+    assert repo.links_for_asset(asset_id=aid, **SCOPE) == ["mem:1", "mem:2"]
+    repo.close()
+    repo = Repository(open_repository(config.data_dir))
+    assert repo.asset(aid, P) == before
+    if status == "ready":
+        result = get_asset(provider=prov, repo=repo, provider_instance_id=P,
+                           asset_id=aid, **SCOPE)
+        assert isinstance(result, Image) and result.data == PNG
+    assert not repo._conn.execute(
+        "SELECT 1 FROM provider_locators WHERE status='pending'"
+        " AND provider_file_id IS NOT NULL").fetchall()
+    repo.close()

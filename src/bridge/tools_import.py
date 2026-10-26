@@ -280,26 +280,27 @@ def register_asset(
             # own file_id is resolved by B-11/B-12 reconciliation via
             # (folder_id, name/size/mtime) — never guessed here.
             try:
-                repo.upsert_asset_with_locator(
-                    asset_id=asset_id, origin="managed", media_kind="image",
-                    media_type=sniffed, size_bytes=len(data),
-                    relative_managed_path=rel,
-                    provider_instance_id=pid,
-                    provider_file_id=None,
-                    provider_generation=live_generation,
-                    provider_folder_id=config.managed_folder_id,
-                    last_seen_kind="image",
-                    # Resolution evidence the provider can actually match for
-                    # a content-addressed copy: size + kind + generation.
-                    # mtime is deliberately NOT stored yet — the copy's mtime
-                    # is its COPY time, which the watcher rewrites as it
-                    # scans; last_seen_mtime is filled at bind time from the
-                    # provider's own value (docs/11 §5: provider data only).
-                    last_seen_size=len(data),
-                    status="pending",
-                )
-                repo.set_asset_digest(asset_id=asset_id,
-                                      content_sha256=digest)
+                if repo.asset(asset_id, pid) is None:
+                    repo.upsert_asset_with_locator(
+                        asset_id=asset_id, origin="managed", media_kind="image",
+                        media_type=sniffed, size_bytes=len(data),
+                        relative_managed_path=rel,
+                        provider_instance_id=pid,
+                        provider_file_id=None,
+                        provider_generation=live_generation,
+                        provider_folder_id=config.managed_folder_id,
+                        last_seen_kind="image",
+                        # Resolution evidence the provider can actually match for
+                        # a content-addressed copy: size + kind + generation.
+                        # mtime is deliberately NOT stored yet — the copy's mtime
+                        # is its COPY time, which the watcher rewrites as it
+                        # scans; last_seen_mtime is filled at bind time from the
+                        # provider's own value (docs/11 §5: provider data only).
+                        last_seen_size=len(data),
+                        status="pending",
+                    )
+                    repo.set_asset_digest(asset_id=asset_id,
+                                          content_sha256=digest)
             except StorageError:
                 return fail("asset_unavailable", aid=asset_id)
 
@@ -313,7 +314,8 @@ def register_asset(
                 return fail("invalid_request", aid=asset_id)
 
             return RegisterAssetResult(
-                ok=True, asset_id=asset_id, link_status="pending",
+                ok=True, asset_id=asset_id,
+                link_status=repo.asset(asset_id, pid)["locator_status"],
                 deduplicated=dedup, media_type=sniffed,
             )
         except BridgeError as exc:
