@@ -1,4 +1,4 @@
-# 17 — CP-02 evaluation audit: what CPersona is measured with, and what Gemma can be compared to
+# 16 — CP-02 evaluation audit: what CPersona is measured with, and what Gemma can be compared to
 
 Issue: #19 (CP-02). This memo is the Phase-1 audit that must precede any new
 measurement: it records **what the reported numbers actually measure**, which
