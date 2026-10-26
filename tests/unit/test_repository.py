@@ -188,14 +188,14 @@ def test_non_pending_requires_file_id(repo):
         add_external(repo, file_id=None, status="ready")
 
 
-def test_set_locator_status_updates_evidence_not_file_id(repo):
+def test_demotion_preserves_trusted_evidence_and_file_id(repo):
     asset = add_external(repo, file_id=10)
     repo.set_locator_status(asset_id=asset, provider_instance_id=PROVIDER,
                             status="stale", provider_generation="2",
                             last_seen_size=55)
     row = repo.asset(asset, PROVIDER)
     assert (row["locator_status"], row["provider_file_id"], row["provider_generation"],
-            row["last_seen_size"]) == ("stale", 10, "2", 55)
+            row["last_seen_size"]) == ("stale", 10, "1", 100)
 
 
 def test_set_locator_status_missing_row_raises(repo):

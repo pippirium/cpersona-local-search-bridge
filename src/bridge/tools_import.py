@@ -221,12 +221,12 @@ def register_asset(
                 if conflict:
                     # id handed to a different file: refuse, mark stale truth
                     try:
-                        repo.set_locator_status(
-                            asset_id=ev["asset_id"],
-                            provider_instance_id=pid, status="stale",
-                            last_seen_size=int(declared),
-                            last_seen_mtime=detail.get("mtime"),
-                            last_seen_name=detail.get("name"),
+                        from bridge.statemachine import apply_transition
+
+                        apply_transition(
+                            repo, asset_id=ev["asset_id"],
+                            provider_instance_id=pid,
+                            src=ev["status"], dst="stale",
                         )
                     except Exception:
                         pass
