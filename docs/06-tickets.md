@@ -1,6 +1,6 @@
 # 06 — Detailed implementation tickets
 
-**Status: proposal only.** Each section is intended to become one GitHub Issue. B-* work belongs to this bridge repository. LS-01 / CP-01 / CP-02 are **cross-project coordination tickets tracked here**, not authorization to change private local-search or CPersona upstream. Each implementation needs its own PR after review.
+**Historical ticket specifications.** These sections became GitHub Issues; they describe acceptance scope, not current completion. [README](../README.md) reports implemented/unverified status; [Epic #20](https://github.com/pippirium/cpersona-local-search-bridge/issues/20) links the current issue states and merged PR evidence. B-* work belongs to this bridge repository. LS-01 / CP-01 / CP-02 are **cross-project coordination tickets tracked here**, not authorization to change private local-search or CPersona upstream. Each implementation needs its own PR after review.
 
 Use task IDs as stable references even when GitHub issue numbers differ. Detailed work is constrained by requirements 01, architecture 02, data model 03, interfaces 04 and delivery order 05.
 

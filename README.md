@@ -1,10 +1,10 @@
 # CPersona × local-search Bridge
 
-**CPersonaのテキスト記憶とlocal-searchの画像・ファイル検索をつなぐ、ローカル専用のMCPアダプター計画。**
+**CPersonaのテキスト記憶とlocal-searchの画像・ファイル検索をつなぐ、ローカル専用のMCPアダプター。**
 
-> **Status: M0進行中（Bridgeサーバー未実装）**
+> **Status: 開発版（0.0.0）。stdio MCP・9ツール実装済み、未リリース。**
 >
-> このリポジトリには現時点で動作するBridgeサーバーやMCPツールはありません。README・設計・チケットは**実装仕様と作業計画**です。利用を開始できる状態であるかのようには扱わないでください。B-01の契約監査（[docs/10](docs/10-contract-audit.md)）と合成fixture＋contractテストが加わりましたが、これらは仕様確定用の検査資産であり、連携サービスは仍然として存在しません。
+> M0〜M2の実装とオフライン検証、評価CLI・運用手順があります。実モデルの品質数値、fresh Mac導入、実CPersonaを含む3プロセス結合は未検証です。安全性修正 #39〜#43 と検証条件は[決定記録](docs/09-decisions.md)を参照してください。実装済みはリリース承認・安全性の無条件保証を意味しません。
 
 ## 目的と背景
 
@@ -18,7 +18,7 @@ Bridgeは両者を置き換えず、**記憶への画像の紐付け、画像参
 - 通常のrecall/reconstructは画像を自動読込せず、**画像ID・根拠への参照だけ**を返す。
 - エージェントが画像を必要と判断して**明示的に要求したときだけ**取得する。
 
-この方式なら、画像のバイナリをCPersonaの記憶DBに入れずに利用できます。M1ではすでにlocal-searchが索引化したファイルをそのまま参照し、M2では必要に応じてBridgeの管理フォルダへコピーして新しい画像を登録する計画です。ユーザーの元ファイルを移動・変更・削除しません。
+この方式なら、画像のバイナリをCPersonaの記憶DBに入れずに利用できます。M1ではすでにlocal-searchが索引化したファイルをそのまま参照し、M2では必要に応じてBridgeの管理フォルダへコピーして索引済み画像の管理コピーを登録します。任意パスや未索引ファイルのuploadはありません。ユーザーの元ファイルを移動・変更・削除しません。
 
 ## 構成
 
@@ -35,17 +35,17 @@ flowchart LR
 
 **M1は同じMac上のローカル利用を前提**とし、Bridgeはstdio MCP、local-searchは既存の127.0.0.1:18765 APIを利用します。local-searchのHost/Originガードを無効化したり、ネットワーク公開する機能は含めません。
 
-## 連携でできるようにすること（計画）
+## 現在の機能
 
 | ユースケース | マイルストーン | 進捗 |
 | --- | --- | --- |
-| local-searchの既存画像とCPersona記憶を関連付ける | M1 | 未実装 |
-| 記憶に関連する画像IDの一覧・検索 | M1 | 未実装 |
-| 明示的な要求でのみ画像をMCPへ返す | M1 | 未実装 |
-| 同じファイルの重複関連付けと再起動時の永続化 | M1 | 未実装 |
-| Agentから明示指定した新しい画像を安全に取り込む | M2 | 未実装 |
-| 索引再構築・移動・消失時の参照整合性を回復する | M2 | 未実装 |
-| 3サービスの結合テストとLLM不要の画像検索ベンチマーク | M3 | 未実装 |
+| local-searchの既存画像とCPersona記憶を関連付ける | M1 | 実装済み・合成テスト |
+| 記憶に関連する画像IDの一覧・検索 | M1 | 実装済み・合成テスト |
+| 明示的な要求でのみ画像をMCPへ返す | M1 | 実装済み・合成テスト |
+| 同じファイルの重複関連付けと再起動時の永続化 | M1 | 実装済み・合成テスト |
+| 明示指定した索引済み画像を管理folderへコピーする | M2 | 実装済み・opt-in |
+| 索引再構築・移動・消失時の照合・状態監査 | M2 | 実装済み・同一性不明なら取得不可 |
+| 結合検査・LLM不要の評価CLI | M3 | 実装済み・実provider監査はfake embedder。3プロセス・実モデル品質は未検証 |
 
 公開リポジトリのコードに秘密鍵・個人の会話ログ・画像・ローカル絶対パスを含めないでください。既存のlocal-searchは個人用途のプロジェクトであり、本リポジトリはその内部実装を複製せず**既存HTTP API**経由で接続します。
 
@@ -87,9 +87,9 @@ flowchart LR
 ## 実装ロードマップ
 
 - **M0 — 契約と設計の確定:** ✅ 完了（B-01〜B-03, LS-01。docs/10・docs/13）
-- **M1 — 最小MCPアダプター:** ✅ 完了（B-04〜B-09。link/unlink/search/list/get の5ツール）
+- **M1 — 最小MCPアダプター:** ✅ 完了（B-04〜B-09。healthを含む6ツール）
 - **M2 — ファイル取り込み・運用:** ✅ 完了（B-10〜B-12, CP-01。管理コピー・pending解決・状態機械・監査。計9ツール）
-- **M3 — 結合評価:** 🔄 進行中（B-13実測監査・B-14 eval CLI・B-15 runbook=PR作成済み。実モデル評価は未測定として記録）
+- **M3 — 結合評価:** 🔄 進行中（B-13監査・B-14 eval CLI・B-15 runbookはmainへマージ済み。3プロセス結合・実モデル評価・CP-02は未完了）
 
 GitHub Issueは**Bridgeで全体を統括**し、他リポジトリへの変更が本当に必要なときだけ別途承認を得て作業します。CPersona側のfork policyに従い、[Cloto-dev/CPersona](https://github.com/Cloto-dev/CPersona)へのpushやPRは行いません。
 
@@ -106,7 +106,7 @@ GitHub Issueは**Bridgeで全体を統括**し、他リポジトリへの変更�
 uv sync
 ```
 
-MCPクライアント登録例（stdio）と環境変数表は **[operations/RUNBOOK.md](operations/RUNBOOK.md) §1〜§3**。起動は `uv run python -m bridge.server`（`PYTHONPATH=src`）。
+MCPクライアント登録例（stdio）と環境変数表は **[operations/RUNBOOK.md](operations/RUNBOOK.md) §1〜§3**。起動はリポジトリrootから `PYTHONPATH=src uv run python -m bridge.server`。
 
 ## 開発の進め方
 
@@ -114,10 +114,12 @@ MCPクライアント登録例（stdio）と環境変数表は **[operations/RUN
 
 ## 現在の状態と制約
 
-MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest`（254 passed、main基準）で回帰保証されています。未測定として正直に記録しているもの:
+MCPサーバー（stdio・9ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は301 passed / 4 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
 
 - **実EmbeddingGemmaでの検索品質数値**（evalはfake embedderで配管検証のみ実施。数値の転記禁止はdocs/07・[eval/README.md](eval/README.md)）
 - **工場出荷状態のMacでのインストール手順実演**（RUNBOOK §1に[fresh-Mac unverified]表記）
+- **実CPersona・Bridge・local-searchの3プロセス結合**（docs/15は実HTTP provider＋合成MCP配線、CPersonaは契約fixture）
+- **CP-02の独立モデル比較**（#19。別リポジトリ作業の個別承認が必要）
 - 自動スケジューラは存在しない（resolve/auditは明示実行のみ=docs/03 §7の設計）
 
 信頼境界: ローカルオペレーター＋stdioトランスポート。`agent_id`等のスコープ引数は**認証ではない**（docs/03 §6）。local-searchのファイル消失は「取得不可」であって別ファイルを返す許可ではない（AGENTS.md不変条件）。
