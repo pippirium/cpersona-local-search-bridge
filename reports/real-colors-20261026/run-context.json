@@ -1,0 +1,16 @@
+{
+  "provider_commit": "31f31048fb8edeedf0f94d295bc0c9471000920a",
+  "model": {
+    "id": "google/embeddinggemma-2",
+    "revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+    "config": "text_image",
+    "device": "mps",
+    "dtype": "bf16",
+    "state": "ready",
+    "progress": null,
+    "memory_mb": 2497.0,
+    "error": null
+  },
+  "manifest_sha256": "f3653efa64da62dc90b4df2d813e50cf45391e465579b00c40cd8a3c79884625",
+  "condition": "isolated provider, clone of existing complete pinned weights; offline mode; no generated LLM; synthetic solid colors only"
+}
