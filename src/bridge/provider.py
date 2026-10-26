@@ -41,10 +41,10 @@ class ProviderPort(Protocol):
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
-    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]:
+    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]:
         def op() -> list[dict]:
-            self.calls.append(("list_folder", (folder_id,), {"limit": limit}))
-            self._fail("list_folder")
+            self.calls.append(("folder_entries", (folder_id,), {"limit": limit}))
+            self._fail("folder_entries")
             out = []
             for fid in self.folder_files.get(folder_id, [])[:limit]:
                 f = self.files.get(fid)
@@ -73,7 +73,7 @@ class ProviderPort(Protocol):
 
     def folders(self) -> list[dict]: ...
 
-    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]: ...
+    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]: ...
 
 
 def _retry_get(op: Callable[[], dict], *, retryable: bool):
@@ -216,10 +216,10 @@ class FakeProvider:
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
-    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]:
+    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]:
         def op() -> list[dict]:
-            self.calls.append(("list_folder", (folder_id,), {"limit": limit}))
-            self._fail("list_folder")
+            self.calls.append(("folder_entries", (folder_id,), {"limit": limit}))
+            self._fail("folder_entries")
             out = []
             for fid in self.folder_files.get(folder_id, [])[:limit]:
                 f = self.files.get(fid)

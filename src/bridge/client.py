@@ -154,16 +154,27 @@ class LocalSearchClient:
         self._check(response)
         return self._json_list(response)
 
-    def list_folder(self, folder_id: int, *, limit: int) -> list[dict]:
-        # GET /api/files?folder_id=&limit=N — the folder inventory route from
-        # the contract audit (docs/10); array response, same drift rule as
-        # folders().
-        response = self._get(
-            "/api/files", retryable=True,
-            params={"folder_id": int(folder_id), "limit": int(limit)},
-        )
+    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]:
+        """Folder inventory via GET /api/files/recent — the audited route
+        (docs/10): it answers a JSON ARRAY of ResultItems, newest-first, and
+        has NO folder filter, so entries are selected here by folder_id.
+        `limit` bounds the RETURNED entries; the fetch pages through up to
+        _RECENT_MAX per request (server caps limit at RECENT_MAX=100)."""
+        out: list[dict] = []
+        fetch = min(max(int(limit), 1), 100)
+        # recent is newest-first without paging; for a bounded managed folder
+        # one page suffices to see fresh copies — full-history inventory is
+        # not a provider capability (recorded limitation, docs/10).
+        response = self._get("/api/files/recent", retryable=True,
+                             params={"limit": fetch})
         self._check(response)
-        return self._json_list(response)
+        items = self._json_list(response)
+        for item in items:
+            if item.get("folder_id") == int(folder_id):
+                out.append(item)
+                if len(out) >= int(limit):
+                    break
+        return out
 
     def file_detail(self, file_id: int) -> dict:
         response = self._get(f"/api/files/{int(file_id)}", retryable=True)
