@@ -363,3 +363,48 @@ def test_wrong_listing_shard_never_binds(env):
     prov.files[900].rel_dir = "wrong-shard"
     assert not resolve_pending(provider=prov, repo=repo, config=config).bound
     assert repo.locator_status(aid, P) == "pending"
+
+
+@pytest.mark.parametrize("raw_count,managed_count,limit", [
+    (100, 1, 100), (100, 0, 100), (100, 100, 100),
+    (99, 1, 100), (100, 1, 1000),
+])
+def test_http_recent_completeness_reaches_resolver(env, raw_count, managed_count, limit):
+    import httpx
+    from bridge.client import LocalSearchClient
+
+    repo, prov, config = env
+    aid = imported(repo, prov, config)
+    asset = repo.asset(aid, P)
+    provider_sees_copy(prov, asset)
+    candidate = prov.file_detail(900)
+    items = [dict(candidate, file_id=900 + n) for n in range(managed_count)]
+    items += [dict(candidate, file_id=2000 + n, folder_id=88)
+              for n in range(raw_count - managed_count)]
+    def handler(request):
+        if request.url.path == "/api/folders":
+            return httpx.Response(200, json=[{"id": 77, "watch": True}])
+        if request.url.path == "/api/files/recent":
+            assert request.url.params["limit"] == "100"
+            return httpx.Response(200, json=items)
+        if request.url.path == "/api/files/900":
+            return httpx.Response(200, json=candidate)
+        pytest.fail("unexpected provider route")
+    client = LocalSearchClient(config)
+    try:
+        client._client.close()
+        client._client = httpx.Client(transport=httpx.MockTransport(handler),
+                                    base_url=config.provider_base_url)
+        inventory = client.folder_entries(77, limit=limit)
+        assert inventory.raw_count == raw_count
+        assert len(inventory.items) == managed_count
+        assert inventory.truncated == (raw_count == 100)
+        rep = resolve_pending(provider=client, repo=repo, config=config)
+    finally:
+        client.close()
+    if raw_count == 100:
+        assert rep.bound == []
+        assert rep.waiting == [{"asset_id": aid, "reason": "page_full"}]
+        assert repo.locator_status(aid, P) == "pending"
+    else:
+        assert rep.bound == [{"asset_id": aid, "file_id": 900}]

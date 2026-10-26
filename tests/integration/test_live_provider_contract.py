@@ -91,8 +91,8 @@ def test_folder_entries_recent_shape():
     try:
         fid = int(os.environ["BRIDGE_LIVE_FOLDER_ID"])
         entries = client.folder_entries(fid, limit=50)
-        assert all(e["folder_id"] == fid for e in entries)
-        for e in entries[:1]:
+        assert all(e["folder_id"] == fid for e in entries.items)
+        for e in entries.items[:1]:
             for key in ("file_id", "kind", "name", "size", "mtime"):
                 assert key in e
     finally:
@@ -166,7 +166,7 @@ def test_managed_pending_resolution_full_loop():
     provider_file_id = None
     while time.time() < deadline:
         entries = client.folder_entries(folder, limit=100)
-        hit = [e for e in entries if e["name"] == fixture_name]
+        hit = [e for e in entries.items if e["name"] == fixture_name]
         if hit:
             provider_file_id = hit[0]["file_id"]
             break

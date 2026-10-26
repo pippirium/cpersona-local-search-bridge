@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         deadline = time.time() + 30
         file_id = None
         while time.time() < deadline:
-            for e in client.folder_entries(args.folder_id, limit=100):
+            for e in client.folder_entries(args.folder_id, limit=100).items:
                 if e["name"] == drop.name:
                     file_id = e["file_id"]
                     break

@@ -56,3 +56,7 @@ Every fetch checks status, availability, kind, name, generation, size and mtime 
 ## D-23 — Managed copy identity before binding (B-11, #41)
 
 Size alone never identifies a managed copy. Listing and fresh detail must agree with stored content-addressed basename AND shard `rel_dir`, folder, kind and size (docs/11). Foreign same-size entries are ignored; duplicate identity entries remain ambiguous. The audited provider exposes `rel_dir` in both responses, so missing or contradictory directory evidence leaves pending. No schema change or implicit content read.
+
+## D-24 — Inventory completeness belongs to the raw page (B-06/B-11, #42)
+
+Client-side folder filtering must retain raw_count and truncated in FolderInventory. Resolver never infers completeness from filtered item count; a full effective recent page always waits/page_full. Provider's 100-item cap cannot be bypassed with a larger limit. Internal adapter contract changes only; no HTTP API or database migration.

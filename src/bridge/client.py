@@ -20,7 +20,7 @@ import httpx
 
 from bridge.config import BridgeConfig, is_literal_loopback
 from bridge.errors import BridgeError, provider_error_to_bridge_code
-from bridge.provider import _retry_get
+from bridge.provider import FolderInventory, _retry_get
 
 _TIMEOUT = httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=5.0)
 
@@ -177,27 +177,20 @@ class LocalSearchClient:
         self._check(response)
         return self._json_list(response)
 
-    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]:
-        """Folder inventory via GET /api/files/recent — the audited route
-        (docs/10): it answers a JSON ARRAY of ResultItems, newest-first, and
-        has NO folder filter, so entries are selected here by folder_id.
-        `limit` bounds the RETURNED entries; the fetch pages through up to
-        _RECENT_MAX per request (server caps limit at RECENT_MAX=100)."""
-        out: list[dict] = []
+    def folder_entries(self, folder_id: int, *, limit: int) -> FolderInventory:
+        """Preserve raw-page completeness before client-side folder filtering.
+        Recent is globally newest-first, capped at 100, with no pagination.
+        A full requested page is possibly truncated, even at smaller limits.
+        """
         fetch = min(max(int(limit), 1), 100)
-        # recent is newest-first without paging; for a bounded managed folder
-        # one page suffices to see fresh copies — full-history inventory is
-        # not a provider capability (recorded limitation, docs/10).
         response = self._get("/api/files/recent", retryable=True,
                              params={"limit": fetch})
         self._check(response)
         items = self._json_list(response)
-        for item in items:
-            if item.get("folder_id") == int(folder_id):
-                out.append(item)
-                if len(out) >= int(limit):
-                    break
-        return out
+        return FolderInventory(
+            items=[item for item in items if item.get("folder_id") == int(folder_id)],
+            raw_count=len(items), truncated=len(items) >= fetch,
+        )
 
     def file_detail(self, file_id: int) -> dict:
         response = self._get(f"/api/files/{int(file_id)}", retryable=True)
