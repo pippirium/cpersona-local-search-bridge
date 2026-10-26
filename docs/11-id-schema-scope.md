@@ -127,3 +127,7 @@ Deferred to B-05 (documented, not executed now): connection reopen/restart durab
 ## 10. Decisions to record in docs/09 (this PR)
 - **D-16 (Adopted)**: scope is exact-equality over four normalized-to-empty strings; CPersona's γ/channel widening is deliberately NOT mirrored in Bridge link visibility.
 - **D-17 (Adopted)**: v1 schema frozen as `migrations/0001_v1.sql` + partial unique index; `provider_file_id` NULL only while pending; locator state graph frozen (§4).
+
+## Managed pending binding (B-11, #41)
+
+The stored `relative_managed_path` supplies expected basename and shard directory. Both `/api/files/recent` ResultItem and fresh FileDetail must match that name, `rel_dir`, configured folder, image kind and byte size; explicit unavailable or unacceptable status refuses. Exactly one identity-matching candidate may bind. Zero matches stays pending/not_indexed_yet, multiple matches stays pending/ambiguous_identity, changed detail stays pending/detail_mismatch. No arbitrary path is resolved and no content is fetched. Directory/name metadata is evidence, not a cryptographic proof: a malicious provider or replacement preserving all fields remains outside this guarantee. Missing relative-directory evidence cannot establish a match.

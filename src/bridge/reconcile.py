@@ -7,18 +7,10 @@ unregistered/unwatched root leaves pendings pending and says so — it never
 marks anything ready (存在しないファイルready禁止) and never calls folder
 mutation endpoints (local-search's watcher owns discovery; docs/13).
 
-One provider file can legitimately answer multiple pendings ONLY if their
-sizes differ — never. Size is the join evidence: a copy's provider-visible
-facts at scan time are (kind=image, size=copy bytes, mtime=copy time). The
-resolver binds exactly when:
-  - folder ledger says registered + watch on
-  - exactly one folder-inventory entry matches the pending's last_seen_size
-    AND kind, and is inside the configured managed folder
-  - its FileDetail confirms kind/available and the same size (the provider
-    itself re-asserts the match; the listing alone is never enough)
-Any ambiguity (0 or >=2 matches, detail disagreement, transient fault)
-leaves the pending untouched with a truthful reason. No timeouts force a
-bind: an unindexed file is NOT ready, ever.
+A pending copy binds only when listing and fresh detail both match its stored
+managed relative directory, basename, size, image kind, availability/status
+and configured folder. Only one matching candidate is admissible. A foreign
+same-size image is not identity evidence. No image bytes are read to bind.
 
 revalidate() applies the docs/11 §5 verdict through the state machine, and
 transient faults never change status (切断は欠落ではない).
@@ -113,9 +105,20 @@ def resolve_pending(
                 {"asset_id": pending["asset_id"], "reason": "page_full"})
             continue
         size = pending["size_bytes"]
+        rel = pending.get("relative_managed_path") or ""
+        directory, _, name = rel.rpartition("/")
+        if not directory or not name:
+            report.waiting.append(
+                {"asset_id": pending["asset_id"], "reason": "identity_missing"})
+            continue
         matches = [
             item for item in inventory
             if item.get("kind") == "image"
+            and item.get("name") == name
+            and item.get("rel_dir") == directory
+            and item.get("folder_id") == config.managed_folder_id
+            and item.get("available", True)
+            and item.get("status", "indexed") in ("indexed", "pending")
             and size is not None
             and item.get("size") is not None
             and int(item["size"]) == int(size)
@@ -131,10 +134,9 @@ def resolve_pending(
                 {"asset_id": pending["asset_id"], "reason": "page_full"})
             continue
         if len(matches) > 1:
-            # ambiguous: two same-size copies (identical bytes dedup upstream,
-            # so this means foreign files) — never guess (docs/13 fail-closed)
+            # Multiple records claim the same copy identity: never guess.
             report.waiting.append(
-                {"asset_id": pending["asset_id"], "reason": "ambiguous_size"})
+                {"asset_id": pending["asset_id"], "reason": "ambiguous_identity"})
             continue
         candidate = matches[0]
         file_id = int(candidate["file_id"])
@@ -148,7 +150,10 @@ def resolve_pending(
                 {"asset_id": pending["asset_id"],
                  "reason": "provider_" + exc.code})
             continue
-        if (detail.get("kind") != "image"
+        if (detail.get("name") != name
+                or detail.get("rel_dir") != directory
+                or detail.get("status") not in ("indexed", "pending")
+                or detail.get("kind") != "image"
                 or not detail.get("available", True)
                 or detail.get("size") is None
                 or int(detail["size"]) != int(size)

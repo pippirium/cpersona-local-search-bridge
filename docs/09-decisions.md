@@ -52,3 +52,7 @@ Demotion to stale/missing/incompatible never refreshes trusted identity columns.
 ## D-22 — Independent fetch gates (B-09, #40; supersedes D-20 gate details)
 
 Every fetch checks status, availability, kind, name, generation, size and mtime independently using the decision table in docs/11 §5. Known generation mismatch or name mismatch always refuses; size/mtime edits require known unchanged generation and matching name. Missing generations do not become the string `None` and never grant a waiver. This strengthens fetch only; import/reconcile retain their distinct copy/status purposes and cannot refresh fetch evidence. No API/schema change.
+
+## D-23 — Managed copy identity before binding (B-11, #41)
+
+Size alone never identifies a managed copy. Listing and fresh detail must agree with stored content-addressed basename AND shard `rel_dir`, folder, kind and size (docs/11). Foreign same-size entries are ignored; duplicate identity entries remain ambiguous. The audited provider exposes `rel_dir` in both responses, so missing or contradictory directory evidence leaves pending. No schema change or implicit content read.
