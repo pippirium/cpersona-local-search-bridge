@@ -1,5 +1,5 @@
-# Evaluation result schema (B-14, docs/07 §output). Versioned.
 {
+  "$comment": "Evaluation result schema (B-14, docs/07 output), versioned.",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "bridge-eval-run.schema.json",
   "version": 1,

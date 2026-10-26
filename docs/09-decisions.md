@@ -69,6 +69,16 @@ Reusing a managed digest adds only an idempotent scoped link. Existing locator i
 
 README and docs/04 describe current development runtime, docs/06 preserves original acceptance scope, and GitHub issue states/merged PRs track delivery. Historical D-IDs/audit runs remain labeled historical and cannot prove later fixes or unexecuted full integration. Corrected startup requires explicit src on PYTHONPATH; pytest configuration does not configure server startup. No release, real-model quality, fresh-Mac install or real CPersona three-process success is claimed. External MCP link generation capture remains absent, conservatively disabling its edit waiver.
 
-## D-27 — CP-02 evaluation regime and its documented deviations (CP-02, #19)
+
+## D-27 — Real three-process smoke is opt-in and isolated (B-13, #20)
+
+`tests/integration/test_three_process.py` launches a real fork stdio process, a separate Bridge stdio process and a dedicated loopback provider child. Only generated media and temporary databases are used. Explicit executable environment variables are required; default offline tests skip it. CPersona embeddings are disabled and the provider uses its documented fake embedder, so docs/16 establishes integration correctness without claiming semantic quality. No external repository modifications or live service/config changes.
+
+
+## D-28 — Real-model probe evidence stays dataset-bounded (B-14, #20)
+
+A predeclared 12-query, three-image RGB manifest was run against pinned real EmbeddingGemma 2 in an isolated provider (docs/17). Commit per-query output and model/manifest fingerprints without private paths, rather than promoting fake scores or this trivial probe to general-quality/model-comparison claims. Report priming/cache limitations and missing cold/resource baselines explicitly. The schema's leading comment becomes standard `$comment`, with no semantic/version change. No provider source or live data/config modifications.
+
+## D-29 — CP-02 evaluation regime and its documented deviations (CP-02, #19)
 
 Track B comparison of EmbeddingGemma 2 (pinned `914f7f89…`) against the reported bge-m3/jina numbers runs from fork **worktrees** only; the fork checkout stays byte-unchanged and the model snapshot lands in a throwaway HF cache laid out exactly like local-search's REQUIRED_FILES (adoptable later via `cache_folder`; production caches untouched). Two deviations from the reported arms are pinned: (1) precision — the harness `--dtype float16` is replaced by the adopted deployment's policy (MPS→bf16, CPU→fp32; fp16 never, NaN risk) plus `config_kwargs` dropping unused vision/audio towers; (2) token window — the checkpoint tokenizer advertises `model_max_length=1e30` and crashes the harness's explicit-truncation path (`OverflowError`), so `--max_seq_len` clamps it (1024–2048 per log line `@msN`, versus the reported arm's native 8192). Consequence: per-task deltas are quoted with window/precision noted and never aggregated across device/precision regimes (docs/07). On this development Mac, encoding beyond ~6k documents hangs (MPS GPU-copy queue wait; CPU fp32 ~1.7 docs/s) and the machine freezes — measured tasks are LoCoMo 46.10, ESGReports 43.22, LMEB_SciFact 74.66; the remaining 19 tasks are recorded as **unmeasured**, no overall mean is computed, and no ranking claim is made. OpenViking publishes no embedding model, so no embedding-layer comparison with it exists. Recipe and results: tools/eval/cp02/README.md.

@@ -37,7 +37,7 @@ The frozen M1 policy (B-03) is [docs/12-threat-model-media-policy.md](12-threat-
 5. Run bridge_health and a dry-run with synthetic memory/file IDs from a disposable corpus.
 6. Explicitly link an indexed image, list/search its reference and explicitly fetch that image.
 7. Verify no source file modification and no sensitive strings logged.
-The runnable stdio service and nine tools are implemented. Follow [RUNBOOK](../operations/RUNBOOK.md) for exact commands/configuration and recorded rehearsal limits. Fresh-Mac install and full three-process integration remain unverified. `bridge_health` is readiness information, not a security certification.
+The runnable stdio service and nine tools are implemented. Follow [RUNBOOK](../operations/RUNBOOK.md) for exact commands/configuration and recorded rehearsal limits. Fresh-Mac install remains unverified; the isolated fake-embedder three-process smoke is recorded in [docs/16](16-three-process-acceptance.md). `bridge_health` is readiness information, not a security certification.
 
 ## Backup/restore and deletion
 - Metadata: use SQLite online backup in a quiescent or consistent snapshot; account for WAL and migration version.

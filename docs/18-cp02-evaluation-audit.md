@@ -1,10 +1,10 @@
-# 16 — CP-02 evaluation audit: what CPersona is measured with, and what Gemma can be compared to
+# 18 — CP-02 evaluation audit: what CPersona is measured with, and what Gemma can be compared to
 
 Issue: #19 (CP-02). This memo is the Phase-1 audit that must precede any new
 measurement: it records **what the reported numbers actually measure**, which
 of them a new embedding run may be compared against, and the honest exclusions.
 Measured values and the repro recipe live in `tools/eval/cp02/README.md`; the
-regime decision is D-27.
+regime decision is D-29.
 
 ## 1. CPersona is evaluated on two distinct layers — never mix them
 
@@ -51,7 +51,7 @@ is computed. The remaining 19 tasks are **unmeasured**: encoding corpora beyond
 ~6k documents stalls on this 32 GB-class Mac (MPS hangs in the GPU copy queue,
 CPU fp32 collapses to ~1.7 docs/s) and the machine freezes under load — the
 user halted the experiment on this basis. The repro under `tools/eval/cp02/`
-documents every deviation (D-27) so the remaining 19 tasks can be completed on
+documents every deviation (D-29) so the remaining 19 tasks can be completed on
 a machine with headroom, ideally re-running bge-m3 under the same pinned
 conditions for a same-regime comparison at that time.
 
@@ -64,3 +64,29 @@ conditions for a same-regime comparison at that time.
 - [x] No OpenViking embedding-layer comparison (undocumented model).
 - [x] Unmeasured tasks left literally unmeasured; no imputed cells, no overall mean.
 - [x] Fork checkout untouched; production memory DB and production model caches untouched.
+
+## 6. Phase 2 (same-branch update, 2026-10-26 afternoon): three-model fixed-condition run
+
+After this machine's Track B limit, the user authorized a separate, smaller
+scope on the same hardware: **three models (Jina v5-nano / BGE-M3 / Gemma 2)
+under one fixed condition set** (MPS/bf16, window 512, per-model dense index,
+no generation LLM), on 10 Japanese synthetic smoke queries plus the complete
+published LMEB_SciFact task (188 queries). Per-query records, win/tie/loss and
+seeded paired bootstrap live in the fork-clone
+`poc/embedding/comparison-results/2026-10-26-mps-bf16/` (commits
+`9544110`+`8c7ecf7`). Bridge independently recomputed every table mean and the
+paired means/win-tie-loss from the published per-query metrics and reproduced
+them exactly (2026-10-26).
+
+Boundaries of that phase, confirmed against #19's acceptance text: it is
+**one published LMEB task plus a synthetic smoke**, not the 22-dataset LMEB
+aggregate, not CPersona Track B (pure dense ranking vs the hybrid pipeline),
+and not a model-selection verdict. #19's acceptance criteria are the metric
+lists (Recall/NDCG/MRR, per-query records, resources, unmeasured honesty) —
+**they do not require the full 22-dataset/193-task measurement**, so the
+isolated full-LMEB download is an extension beyond acceptance, not a gate.
+Two audit findings apply before any full-LMEB run counts: the pinned snapshot
+exposes 193 query tasks over 103 corpora (coverage must be pinned as 103
+grouped inputs), and the QASPER corpus repeats ids (65,300 rows / 20,508
+unique) — the dedup decision must be recorded in the harness fingerprint,
+not left implicit.

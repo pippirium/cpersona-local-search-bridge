@@ -38,3 +38,7 @@ PNG/zip only — no personal files, no open-license download step needed)
 into `--watched-dir`, discovered through the inventory route once the real
 watcher indexes them, and swept unless `--keep` is given. The CLI never
 registers folders and never touches provider data outside that folder.
+
+## Solid-color real-model probe
+
+`manifest.colors.json` declares three deterministic solid RGB PNGs and twelve cases: six Japanese/English text queries, three exact-image queries and three memory associations. Grade 3 is assigned only to the stated color's image before execution. This is a tiny controlled color-retrieval probe, not a representative dataset or a model-comparison claim. Run with the same CLI against an isolated provider with real weights; record `/api/status` model revision/device/dtype, provider commit, manifest SHA-256 and the generated per-query report. Never promote the fake-embedder run to real-model evidence.
