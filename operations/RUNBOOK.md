@@ -1,0 +1,171 @@
+# Bridge operations runbook (B-15)
+
+Status date: 2026-10-26. §2–§7 were executed on the development Mac
+against a throwaway provider data dir; the backup round-trip, rebuild drill
+(which MEASURED rowid reuse and closed a wrong-file return — D-20, docs/13
+Correction), smoke script (9/9) and eval CLI all ran with recorded results.
+**[fresh-Mac unverified]** marks the install procedure only — not rehearsed
+on a factory-fresh machine.
+
+## 0. Pinned dependencies (D-14 — never "latest")
+
+| component | pin | where it lives |
+|---|---|---|
+| Python | 3.12 (uv-managed) | `pyproject.toml` `requires-python` |
+| MCP Python SDK | `mcp>=2.3,<3` | `pyproject.toml` |
+| httpx | `>=0.27` | `pyproject.toml` |
+| local-search | commit `31f31048fb8edeedf0f94d295bc0c9471000920a` (v0.1.1) | your checkout; the audited contract is docs/10 for exactly this commit |
+| CPersona fork | `7821840f114866673022edfc5fe4b21a9b08a5e5` (2.6.13a2) | ref shapes `mem:<int>`/`ep:<int>` audited docs/10 |
+
+Before upgrading ANY pin: re-run the opt-in live integration tests
+(`tests/integration/`, section 6) — they are the contract tripwire.
+
+## 1. Install **[fresh-Mac unverified]**
+
+```sh
+git clone https://github.com/pippirium/cpersona-local-search-bridge
+cd cpersona-local-search-bridge
+uv sync                 # python 3.12 + mcp + httpx (dev: pytest)
+```
+
+No package install is needed to run: everything runs via `uv run` from the
+checkout (`pythonpath=["src"]` + root `bridge_policy.py` are the layout).
+
+## 2. Start local-search and register the watched folder (operator, once)
+
+Start local-search as that project's docs describe (loopback only; never
+change its guard/listener — AGENTS.md). Register a **dedicated** folder
+for Bridge-managed copies and keep `watch: true`:
+
+```sh
+curl -s -X POST -H "Host: 127.0.0.1:18765" -H "Content-Type: application/json" \
+  -d '{"path":"<DEDICATED-DIR>","kinds":["image"],"exclude":[],"watch":true}' \
+  http://127.0.0.1:18765/api/folders
+# -> {"id": N, ..., "watch": true}
+```
+
+The Bridge NEVER calls folder write endpoints; this step is yours. Keep
+the folder dedicated: pending resolution's size-join is only sound inside
+a folder no one else writes to (docs/15 limitation).
+
+## 3. MCP host registration
+
+stdio only (docs/12 §1). Example for a generic MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "cpersona-bridge": {
+      "command": "uv",
+      "args": ["run", "--directory", "/ABS/PATH/cpersona-local-search-bridge",
+               "-m", "bridge.server"],
+      "env": {
+        "BRIDGE_DATA_DIR": "/ABS/PATH/bridge-data",
+        "BRIDGE_PROVIDER_URL": "http://127.0.0.1:18765",
+        "BRIDGE_MANAGED_ROOT": "/ABS/PATH/bridge-managed",
+        "BRIDGE_MANAGED_FOLDER_ID": "N"
+      }
+    }
+  }
+}
+```
+
+Environment keys (src/bridge/config.py validates all of them at startup):
+
+| key | meaning |
+|---|---|
+| `BRIDGE_DATA_DIR` | Bridge SQLite (metadata only). Created 0700 |
+| `BRIDGE_PROVIDER_URL` | loopback literal only (`http://127.0.0.1:<port>`) |
+| `BRIDGE_PROVIDER_INSTANCE_ID` | optional; defaults to the URL authority |
+| `BRIDGE_SOURCE_INSTANCE_ID` | which CPersona instance your links belong to (D-16; set it if you run >1) |
+| `BRIDGE_MANAGED_ROOT` + `BRIDGE_MANAGED_FOLDER_ID` | managed import opt-in, all-or-nothing; root must be 0700, `managed_folder_id` = the id from step 2 |
+
+`bridge_health` answers `managed_enabled`, `managed_folder_registered`,
+`managed_watch` — the premise is checked live, never assumed.
+
+## 4. Backup / restore
+
+Bridge state = **one directory**: `BRIDGE_DATA_DIR` (`bdata/` SQLite, WAL)
+plus `BRIDGE_MANAGED_ROOT` (content-addressed copies).
+
+- **Backup**: stop the MCP host, then `sqlite3 bdata/app.db "PRAGMA
+  wal_checkpoint(TRUNCATE);" && tar czf bridge-backup.tgz bdata managed`.
+  Copying a running DB without checkpointing is unsupported.
+- **Restore**: extract, point the env at the restored paths, restart the
+  host. `bridge_health` first.
+- **What a restore does NOT fix**: provider file ids may have drifted
+  while you were down. Run `audit_assets` (dry-run default) → expected
+  `stale`/`missing` findings → decide. Re-link is explicit
+  (`unlink_asset` + `link_asset`); the Bridge never re-binds silently
+  (D-08) and never deletes your files (docs/08).
+- Managed copies are content-addressed: re-registering the same image
+  reuses the SAME asset without a second write (dedup by SHA-256).
+- Never restore into or copy from local-search's data dir or CPersona's
+  memory DB — those are owned by their apps.
+
+## 5. Provider index rebuild (what it does to you)
+
+Measured (docs/15 + B-15 drill): rebuild bumps `generation`, and a deleted source + rebuild + new file **reuses the old `file_id`** (rowid reuse, measured twice).
+Bridge behavior after a rebuild: reused ids are refused AT FETCH TIME
+by the D-20 evidence gate (`get_asset` -> `asset_unavailable`, never the new
+file's bytes); `audit_assets` classifies evidence-drifted locators `stale`
+(links preserved); managed copies
+re-index themselves through the watcher and
+`resolve_pending_assets` binds fresh ids only for `pending` rows.
+External links that go stale need an explicit relink by you. After any
+rebuild: `bridge_health` → `audit_assets` (dry) → decide → optionally
+`audit_assets(apply=true)` (state transitions only, never rebinds).
+
+## 6. Diagnostics
+
+- `bridge_health` — provider reachable? generation? index mismatch?
+  managed premise? (codes only, never paths)
+- `resolve_pending_assets` — why each managed copy is still pending
+  (`not_indexed_yet` / `ambiguous_size` / `page_full` /
+  `detail_mismatch` / `premise_folder_unwatched` / provider fault codes).
+  Safe to poll; never uses search (docs/15: filename queries are
+  below-threshold anyway).
+- `audit_assets` — dry-run classification + managed-dir orphan/scratch/
+  foreign scan (reports asset ids and codes only). `apply=true` repairs
+  states ONLY through the frozen transition graph.
+- `uv run pytest` — the whole offline suite (fakes + temp DBs; no sockets).
+- live contract tripwire (provider must be up; NEVER starts/stops it):
+  ```sh
+  BRIDGE_LIVE_BASE_URL=http://127.0.0.1:18765 \
+  BRIDGE_LIVE_FOLDER_ID=N BRIDGE_LIVE_WATCHED_DIR=<DEDICATED-DIR> \
+  uv run pytest tests/integration -q
+  ```
+- manual smoke (its own synthetic fixture + link, cleans up after
+  itself):
+  ```sh
+  uv run python operations/smoke.py --provider http://127.0.0.1:18765 \
+      --data-dir /tmp/bridge-smoke --folder-id N
+  ```
+- eval benchmark (explicit, measured vs unmeasured honest): `eval/README.md`
+
+## 7. Privacy check (run after upgrades, and before sharing reports)
+
+1. `uv run pytest tests/security -q` — the committed-text sentinel (no
+   personal paths/tokens in tracked files) and policy-rule tests.
+2. Log discipline is by construction (D-19): the Bridge writes no log
+   files; tool results carry codes and ids only; provider message text is
+   discarded at the client boundary (T-09). If you wrap it in a supervisor,
+   keep ITS logs code-level too.
+3. Eval reports contain fixture ids and ranks, never paths or bytes —
+   spot-check `result.json` before sharing.
+4. Bridge SQLite holds metadata only; managed copies live under
+   `BRIDGE_MANAGED_ROOT` (0700) and nowhere else — `audit_assets` reports
+   foreign files appearing there instead of deleting them (docs/08).
+
+## 8. Known limits (do not paper over)
+
+- `/api/files/recent` caps at 100 newest entries with no paging (docs/10
+  correction): keep the managed folder dedicated and modestly sized, or
+  resolution fail-closes `page_full` (by design).
+- `missing` + managed-copy-on-disk is reported (`missing_copy_on_disk`),
+  never auto-served — serving from copies is a separate authorized
+  product decision (docs/08).
+- No automatic scheduler: resolve/audit are explicit tool calls on
+  purpose (docs/03 §7 — no implicit actions).
+- Managed deletions are not implemented at all; orphan findings are the
+  input to a future operator-authorized cleanup, not a trigger.

@@ -10,7 +10,7 @@ import base64
 import pytest
 
 import bridge_policy
-from bridge.provider import FakeFile, FakeProvider
+from bridge.provider import FakeFailure, FakeFile, FakeProvider
 from bridge.repository import open_repository, Repository
 from bridge.tools_get import GetAssetResult, get_asset
 from bridge.tools_link import link_asset
@@ -40,9 +40,11 @@ def png_file(fid=1, **kw):
     return FakeFile(**base)
 
 
-def make_link(r, prov, fid=1, memory_ref="mem:1", **scope):
+def make_link(r, prov, fid=1, memory_ref="mem:1",
+              provider_generation=None, **scope):
     out = link_asset(provider=prov, repo=r, provider_instance_id=P,
                      memory_ref=memory_ref, provider_file_id=fid,
+                     provider_generation=provider_generation,
                      **(scope or SCOPE))
     assert out.ok, out
     return out.asset_id
@@ -165,8 +167,11 @@ def test_pending_locator_no_guessing(repo):
 
 
 def test_evidence_drift_refreshes_and_serves_the_same_file(repo):
+    # docs/11 §5 waiver: mtime drift (an indexed edit) is admitted ONLY by
+    # generation unchanged + name match. FakeProvider default generation is
+    # "1"; link with the matching hint so the waiver legitimately applies.
     prov = FakeProvider(files={1: png_file()})
-    aid = make_link(repo, prov)
+    aid = make_link(repo, prov, provider_generation="1")
     prov.files[1].size = len(PNG) + 7  # provider re-measured (drift)
     prov.files[1].mtime = "2026-10-05T00:00:00Z"
     res = get(repo, prov, aid)
@@ -175,6 +180,49 @@ def test_evidence_drift_refreshes_and_serves_the_same_file(repo):
     assert isinstance(res, Image)  # identity (same file_id, kind image) holds
     asset = repo.asset(aid, P)
     assert asset["last_seen_size"] == len(PNG) + 7  # evidence refreshed
+
+
+def test_mtime_drift_without_generation_waiver_refuses(repo):
+    # rowid-reuse defense (docs/13, live-measured docs/15): mtime mismatch,
+    # locator never recorded a generation -> waiver unavailable -> refuse.
+    prov = FakeProvider(files={1: png_file()})
+    aid = make_link(repo, prov)
+    prov.files[1].mtime = "2026-10-05T00:00:00Z"
+    res = get(repo, prov, aid)
+    assert isinstance(res, GetAssetResult)
+    assert res.error["code"] == "asset_unavailable"
+    assert [c for c in prov.calls if c[0] == "file_content"] == []
+    assert repo.locator_status(aid, P) == "stale"
+
+
+def test_mtime_drift_generation_switch_refuses(repo):
+    prov = FakeProvider(files={1: png_file()})
+    aid = make_link(repo, prov, provider_generation="1")
+    prov.files[1].mtime = "2026-10-05T00:00:00Z"
+    prov.generation = 2  # rebuild happened: waiver dead even with a name match
+    res = get(repo, prov, aid)
+    assert isinstance(res, GetAssetResult)
+    assert res.error["code"] == "asset_unavailable"
+
+
+def test_mtime_drift_generation_ok_name_drift_refuses(repo):
+    prov = FakeProvider(files={1: png_file()})
+    aid = make_link(repo, prov, provider_generation="1")
+    prov.files[1].mtime = "2026-10-05T00:00:00Z"
+    prov.files[1].name = "someone-else.png"  # ledger rename != same file
+    res = get(repo, prov, aid)
+    assert isinstance(res, GetAssetResult)
+    assert res.error["code"] == "asset_unavailable"
+
+
+def test_mtime_drift_status_probe_failure_refuses(repo):
+    prov = FakeProvider(files={1: png_file()})
+    aid = make_link(repo, prov, provider_generation="1")
+    prov.files[1].mtime = "2026-10-05T00:00:00Z"
+    prov.failures.append(FakeFailure(route="status", code="model_loading"))
+    res = get(repo, prov, aid)
+    assert isinstance(res, GetAssetResult)
+    assert res.error["code"] == "asset_unavailable"
 
 
 # ---- bounds (T-11) --------------------------------------------------------------------------
@@ -341,3 +389,15 @@ def test_get_asset_wire_image_content_no_structured_echo(tmp_path):
 
     anyio.run(go)
     r.close()
+
+
+def test_mtime_drift_generation_ok_name_match_serves(repo):
+    # full waiver: same generation + same audited name -> indexed edit,
+    # serve and refresh (the gate-3b counterpart of the refusal tests)
+    prov = FakeProvider(files={1: png_file()})
+    aid = make_link(repo, prov, provider_generation="1")
+    prov.files[1].mtime = "2026-10-05T00:00:00Z"  # name stays "syn.png"
+    res = get(repo, prov, aid)
+    from mcp.server.mcpserver.utilities.types import Image
+
+    assert isinstance(res, Image)

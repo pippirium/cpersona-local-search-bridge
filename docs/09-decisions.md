@@ -22,6 +22,7 @@ This log separates **approved current facts** from **proposed implementation pol
 | D-16 | Adopted (B-02) | Bridge scope is exact-equality over four strings normalized `None→""` only; CPersona's γ/channel widening is deliberately not mirrored in link visibility | No implicit cross-scope reads; agents must reuse the identical scope tuple (CP-01 guide) |
 | D-17 | Adopted (B-02) | v1 schema frozen in `migrations/0001_v1.sql`; `provider_file_id` NULL only while pending (partial unique index); locator state graph and revalidation evidence frozen in docs/11 §4–§5 | B-05/B-11/B-12 implement against tests that already pin these rules |
 | D-18 | Adopted (B-03) | M1 media caps 8×10⁶ B / 40 MP / JPEG+PNG+WebP+GIF, config-only downward; HEIC/HEIF typed-rejected, never auto-converted | No caller-controlled limits; no silent re-encoding of user originals |
+| D-20 | Adopted (B-15) | get_asset enforces docs/11 §5 item 3 as a hard fetch gate (gate 3b): mtime mismatch refuses (`asset_unavailable` + truthful `stale`) unless generation unchanged AND audited name matches; live generation read from `/api/status`, unknown never grants the waiver; stored rel_dir does not exist so name equality stands in (docs/13 correction) | closes the measured rowid-reuse wrong-file return; audit/reconcile stay mtime-blind by contract |
 | D-19 | Adopted (B-03) | Logs/responses/fixtures obey the docs/12 §6 forbidden-strings list; scope tuples appear only as a truncated sha256 in logs | CI sentinel test enforces on tracked files |
 
 ## Verified source observations (as of 2026-10-26)
