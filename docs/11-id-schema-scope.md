@@ -78,12 +78,18 @@ missing → ready        file seen again unchanged (same folder, size+mtime evid
 
 ## 5. Identity revalidation evidence (frozen minimum set)
 
-A locator revalidation MUST compare, from live provider data only:
-1. `files/{id}` returns 200, `kind` equals `last_seen_kind`,
-2. `size` equals the recorded size (when known),
-3. `mtime` equals the recorded mtime **or** the generation is unchanged and name/rel_dir match (an indexed edit legitimately changes mtime — status stays `ready` only when the provider still calls the file searchable and available),
-4. `status`/`available` are acceptable (`indexed`/`pending`+searchable, `available=true`).
-Failure of any → `stale` (evidence conflict) or `missing` (provider says gone). `provider_generation` mismatch alone → `stale` pending re-resolution, never auto-ready. Content hash comparison applies only when a hash already exists from an explicit fetch; acquiring one never happens implicitly (docs/08).
+Fetch identity validation uses fresh provider metadata before any content request:
+
+| Evidence | Required behavior |
+| --- | --- |
+| kind / availability / status | image, available, indexed or pending; otherwise refuse |
+| known stored and live generation differ | refuse even if mtime is unchanged |
+| stored name missing or live name differs | refuse |
+| size and mtime match stored evidence | allow, absent a conflict above |
+| size or mtime differs/is missing | allow only with known unchanged generation AND identical stored/live name (indexed-edit waiver) |
+| generation absent or status probe fails | no edit waiver; matching size/mtime/name still permits fetch |
+
+Name is the audited basename only; no stored relative-directory evidence exists for external locators (docs/13). Unknown evidence cannot override an explicit contradiction. Metadata-only audit/revalidation retains its kind/size/availability verdict and never refreshes fetch evidence (D-21); status ready alone is insufficient for fetch. Refusals preserve the original evidence, IDs and links. An original file whose evidence returns may recover; incompatible remains terminal. This policy does not detect replacement preserving every observed identity field. No content is read implicitly to strengthen identity.
 
 ## 6. Timestamps and formats (frozen)
 - All stored times: UTC RFC 3339 with `Z` (`2026-10-26T12:00:00Z`), second precision, produced by one helper.
