@@ -41,7 +41,7 @@ use `/tmp` for anything you cannot afford to lose.
 | 5 | `monitor.sh` | kills a stalled task after `STALL_SEC` without log growth; aborts the runner after 3 consecutive stalls |
 
 The launcher copies the harness out of the worktree and applies exactly two
-deviations to the **copy** (never the fork checkout), both recorded in D-27:
+deviations to the **copy** (never the fork checkout), both recorded in D-29:
 
 1. precision — the harness's `--dtype float16` would load fp16, which the
    adopted deployment never uses (NaN risk; policy is MPS→bf16, CPU→fp32), so
