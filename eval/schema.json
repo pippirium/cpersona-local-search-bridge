@@ -1,0 +1,91 @@
+# Evaluation result schema (B-14, docs/07 §output). Versioned.
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bridge-eval-run.schema.json",
+  "version": 1,
+  "type": "object",
+  "required": ["schema_version", "env", "tasks", "per_query", "limitations"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "env": {
+      "type": "object",
+      "required": ["bridge_commit", "provider_version", "provider_generation",
+                   "embedder", "device", "executed_at", "warmup"],
+      "properties": {
+        "bridge_commit": {"type": "string"},
+        "provider_version": {"type": ["string", "null"]},
+        "provider_generation": {"type": ["integer", "string", "null"]},
+        "embedder": {"type": "string", "description":
+          "model id from /api/status model.id, or 'fake' when the server runs the fake embedder"},
+        "device": {"type": ["string", "null"]},
+        "executed_at": {"type": "string"},
+        "warmup": {"type": "integer"},
+        "note": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "tasks": {
+      "type": "object",
+      "description": "per task: query_count, missing_qrels, errors, metrics",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["query_count", "missing_qrels", "errors", "metrics"],
+        "properties": {
+          "query_count": {"type": "integer"},
+          "missing_qrels": {"type": "integer"},
+          "errors": {"type": "integer"},
+          "metrics": {
+            "type": "object",
+            "required": ["ndcg_at_10", "recall_at_10", "success_at_10",
+                         "mrr_at_10", "p50_ms", "p95_ms"],
+            "properties": {
+              "ndcg_at_10": {"type": ["number", "null"]},
+              "recall_at_10": {"type": ["number", "null"]},
+              "success_at_10": {"type": ["number", "null"]},
+              "mrr_at_10": {"type": ["number", "null"]},
+              "p50_ms": {"type": ["number", "null"]},
+              "p95_ms": {"type": ["number", "null"]}
+            },
+            "additionalProperties": false
+          },
+          "status": {"enum": ["measured", "unmeasured"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "per_query": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case_id", "task", "ranks", "errors"],
+        "properties": {
+          "case_id": {"type": "string"},
+          "task": {"enum": ["text_to_image", "memory_to_image", "image_to_image"]},
+          "ranks": {
+            "type": "array",
+            "description": "returned order, asset/file ids and name only — never bytes or paths",
+            "items": {
+              "type": "object",
+              "properties": {
+                "asset_ref": {"type": "string"},
+                "grade": {"type": ["integer", "null"]},
+                "rank": {"type": "integer"}
+              },
+              "additionalProperties": false
+            }
+          },
+          "errors": {"type": "array", "items": {"type": "string"},
+                     "description": "machine codes only"},
+          "latency_ms": {"type": "number"},
+          "misranked_into_top10": {"type": "array", "items": {"type": "string"},
+                                   "description": "unlabeled ids that entered top-10 (誤検索 tracking)"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"},
+                    "minItems": 1,
+                    "description": "ALWAYS non-empty: what was NOT measured"}
+  },
+  "additionalProperties": false
+}

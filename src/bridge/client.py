@@ -146,6 +146,29 @@ class LocalSearchClient:
         self._check(response)
         return self._json(response)
 
+    def search_media(self, data: bytes, *, filename: str,
+                     folder_id: int | None = None,
+                     page_size: int = 20) -> dict:
+        """POST /api/search/media multipart (`file`, tab=image) — the ONLY
+        image→image path (docs/10). Same never-retried rule as text search
+        (it is a search). Eval-only today; kept on the client so eval never
+        bypasses the audited client rules."""
+        try:
+            response = self._client.post(
+                "/api/search/media",
+                files={"file": (filename, data, "application/octet-stream")},
+                data={"tab": "image", "page_size": str(page_size),
+                      **({"folder_id": str(folder_id)} if folder_id is not None else {})},
+            )
+        except httpx.TimeoutException as exc:
+            raise _transport("timeout_read") from exc
+        except httpx.HTTPError as exc:
+            raise _transport("connection") from exc
+        if response.status_code == 400:
+            raise BridgeError("invalid_request", provider_code="bad_request")
+        self._check(response)
+        return self._json(response)
+
     def folders(self) -> list[dict]:
         # GET /api/folders answers with a JSON ARRAY (contract audit docs/10);
         # a dict from it is the provider drifting from contract, which is an
