@@ -94,7 +94,7 @@ async def discover_ids(client, folder_id: int, wanted: dict[str, Path],
     found: dict[str, int] = {}
     while time.time() < deadline and len(found) < len(wanted):
         entries = client.folder_entries(folder_id, limit=100)
-        by_name = {e["name"]: e["file_id"] for e in entries}
+        by_name = {e["name"]: e["file_id"] for e in entries.items}
         for fid, path in wanted.items():
             if fid not in found and path.name in by_name:
                 found[fid] = by_name[path.name]

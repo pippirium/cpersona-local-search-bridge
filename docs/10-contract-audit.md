@@ -52,7 +52,7 @@ Original bytes. `Content-Type` derived from extension (`originals.content_type`;
 
 `GET /api/folders` → `Folder[]` (`id, path, name, kinds, exclude, watch, status, progress, counts, error, added_at, scanned_at`); `POST /api/folders` (create+scan), `POST /api/folders/validate`, `POST /api/folders/{id}/rescan`, `PATCH`, `DELETE`. This confirms the M2 plan's premise (copy into a pre-registered watched folder) is implementable **without any local-search change**. `Folder.path` is absolute — never log it.
 
-**Correction (B-13 live audit, pinned `31f3104`):** the earlier note for a folder inventory route `GET /api/files?folder_id=&limit=` was wrong — **that route does not exist**. The audited inventory route is `GET /api/files/recent?limit=N` → `ResultItem[]`, newest-first, **server-capped at limit=100 and NOT paged, with no server-side folder filter** (the Bridge filters by `folder_id` client-side in `folder_entries()`). Consequence recorded in reconcile: ambiguity checks for pending resolution are sound only within the recent page; a full page (100 entries) is treated as ambiguous (`page_full`) and never binds. `POST/PATCH/DELETE /api/folders*` stay OUT of the Bridge's call set (read-only from the provider; folder registration is operator-side).
+**Correction (B-13 live audit, pinned `31f3104`):** the earlier note for a folder inventory route `GET /api/files?folder_id=&limit=` was wrong — **that route does not exist**. The audited inventory route is `GET /api/files/recent?limit=N` → `ResultItem[]`, newest-first, **server-capped at limit=100 and NOT paged, with no server-side folder filter** (the Bridge filters by `folder_id` client-side in `folder_entries()`). Consequence recorded in reconcile: ambiguity checks for pending resolution are sound only within the recent page; a full raw page (before folder filtering) is treated as ambiguous (`page_full`) and never binds. `POST/PATCH/DELETE /api/folders*` stay OUT of the Bridge's call set (read-only from the provider; folder registration is operator-side).
 
 ### Error envelope (all endpoints)
 
@@ -115,3 +115,7 @@ Verified at `31f3104`:
 - No live HTTP probe (server stopped at audit time). Shapes come from pinned source + its pydantic models; contract fixtures mirror them and CI tests the Bridge model against the fixtures, not against the provider.
 - `thumb` URL prefix (`api/search.py:THUMB_URL`) not consumed by M1; excluded from fixtures.
 - CPersona MCP wire-level sampling was done from source, not from a live MCP session against the production DB (forbidden).
+
+### Inventory adapter completeness (B-06/B-11, #42)
+
+`ProviderPort.folder_entries` returns `FolderInventory(items, raw_count, truncated)`. `items` are folder-filtered but raw_count/truncated describe the unfiltered HTTP page. Requested limit is clamped to 1..100; a response filling that effective limit is conservatively truncated. Resolver checks truncated before candidate matching, including when no managed items survive filtering, and reports page_full without binding. No pagination or server folder filter is assumed. FakeProvider models the same global-page boundary. Evaluation/smoke fixture discovery consumes items without claiming an exhaustive inventory.

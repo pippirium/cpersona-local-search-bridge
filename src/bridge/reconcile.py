@@ -100,7 +100,7 @@ def resolve_pending(
         return report
 
     for pending in pendings:
-        if len(report.bound) >= MAX_BINDS_PER_RUN:
+        if inventory.truncated or len(report.bound) >= MAX_BINDS_PER_RUN:
             report.waiting.append(
                 {"asset_id": pending["asset_id"], "reason": "page_full"})
             continue
@@ -112,7 +112,7 @@ def resolve_pending(
                 {"asset_id": pending["asset_id"], "reason": "identity_missing"})
             continue
         matches = [
-            item for item in inventory
+            item for item in inventory.items
             if item.get("kind") == "image"
             and item.get("name") == name
             and item.get("rel_dir") == directory
@@ -126,12 +126,6 @@ def resolve_pending(
         if len(matches) == 0:
             report.waiting.append(
                 {"asset_id": pending["asset_id"], "reason": "not_indexed_yet"})
-            continue
-        if len(inventory) >= RECENT_PAGE_MAX:
-            # a full recent page cannot be fully surveyed for same-size
-            # siblings outside the page -> ambiguity, fail closed
-            report.waiting.append(
-                {"asset_id": pending["asset_id"], "reason": "page_full"})
             continue
         if len(matches) > 1:
             # Multiple records claim the same copy identity: never guess.

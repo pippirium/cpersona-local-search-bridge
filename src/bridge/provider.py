@@ -21,47 +21,19 @@ from bridge.errors import BridgeError, provider_error_to_bridge_code
 TRANSPORT_CODES = ("connection", "timeout_connect")
 
 
+@dataclass(frozen=True)
+class FolderInventory:
+    items: list[dict]
+    raw_count: int
+    truncated: bool
+
+
 class ProviderPort(Protocol):
     def status(self) -> dict: ...
 
     def file_detail(self, file_id: int) -> dict: ...
 
     def file_content(self, file_id: int, max_bytes: int) -> tuple[bytes, str]: ...
-
-    def folders(self) -> list[dict]:
-        def op() -> list[dict]:
-            self.calls.append(("folders", (), {}))
-            self._fail("folders")
-            return [
-                {"id": fid, "name": f"folder-{fid}", "watch": f.get("watch", True),
-                 "status": f.get("status", "watching"), "kinds": ["image"],
-                 "path": "/fixture-root/folder-" + str(fid)}
-                for fid, f in sorted(self.folders_data.items())
-            ]
-
-        return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
-
-    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]:
-        def op() -> list[dict]:
-            self.calls.append(("folder_entries", (folder_id,), {"limit": limit}))
-            self._fail("folder_entries")
-            out = []
-            for fid in self.folder_files.get(folder_id, [])[:limit]:
-                f = self.files.get(fid)
-                if f is None:
-                    # indexed-listing-only: name/size/mtime known, detail 404s
-                    out.append({"file_id": fid, "kind": "image",
-                                "name": f"pending-{fid}.png",
-                                "rel_dir": "00", "size": 64,
-                                "mtime": "2026-10-26T00:00:00+09:00"})
-                else:
-                    out.append({"file_id": fid, "kind": f.kind, "name": f.name,
-                                "rel_dir": f.rel_dir, "size": f.size,
-                                "folder_id": f.folder_id, "status": f.status,
-                                "available": f.available, "mtime": f.mtime})
-            return out
-
-        return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
     def search(
         self,
@@ -74,7 +46,7 @@ class ProviderPort(Protocol):
 
     def folders(self) -> list[dict]: ...
 
-    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]: ...
+    def folder_entries(self, folder_id: int, *, limit: int) -> FolderInventory: ...
 
 
 def _retry_get(op: Callable[[], dict], *, retryable: bool):
@@ -217,17 +189,22 @@ class FakeProvider:
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
-    def folder_entries(self, folder_id: int, *, limit: int) -> list[dict]:
-        def op() -> list[dict]:
+    def folder_entries(self, folder_id: int, *, limit: int) -> FolderInventory:
+        def op() -> FolderInventory:
             self.calls.append(("folder_entries", (folder_id,), {"limit": limit}))
             self._fail("folder_entries")
+            fetch = min(max(int(limit), 1), 100)
+            # Model the global recent page BEFORE client-side folder filtering.
+            recent = [(folder, fid) for folder, ids in self.folder_files.items()
+                      for fid in ids][:fetch]
             out = []
-            for fid in self.folder_files.get(folder_id, [])[:limit]:
+            for folder, fid in recent:
                 f = self.files.get(fid)
+                if folder != folder_id:
+                    continue
                 if f is None:
-                    # indexed-listing-only: name/size/mtime known, detail 404s
                     out.append({"file_id": fid, "kind": "image",
-                                "name": f"pending-{fid}.png",
+                                "name": f"pending-{fid}.png", "folder_id": folder,
                                 "rel_dir": "00", "size": 64,
                                 "mtime": "2026-10-26T00:00:00+09:00"})
                 else:
@@ -235,7 +212,7 @@ class FakeProvider:
                                 "rel_dir": f.rel_dir, "size": f.size,
                                 "folder_id": f.folder_id, "status": f.status,
                                 "available": f.available, "mtime": f.mtime})
-            return out
+            return FolderInventory(out, len(recent), len(recent) >= fetch)
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
