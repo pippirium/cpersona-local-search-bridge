@@ -1,0 +1,40 @@
+{
+  "fixtures": [
+    {"id": "fx-red",   "generator": "png_solid", "width": 96, "height": 96, "rgb": [220, 30, 30]},
+    {"id": "fx-green", "generator": "png_solid", "width": 96, "height": 96, "rgb": [30, 200, 30]},
+    {"id": "fx-blue",  "generator": "png_solid", "width": 96, "height": 96, "rgb": [30, 30, 220]},
+    {"id": "fx-zip",   "generator": "zip_note"}
+  ],
+  "cases": [
+    {
+      "id": "case-m2i-001",
+      "task": "memory_to_image",
+      "query": {"memory_ref": "mem:9001"},
+      "scope": {"agent_id": "eval", "project_id": "eval", "channel": "demo"},
+      "relevant": [{"asset_ref": "fx-red", "grade": 3},
+                    {"asset_ref": "fx-green", "grade": 1}]
+    },
+    {
+      "id": "case-m2i-002",
+      "task": "memory_to_image",
+      "query": {"memory_ref": "mem:9002"},
+      "scope": {"agent_id": "eval", "project_id": "eval", "channel": "demo"},
+      "relevant": [{"asset_ref": "fx-blue", "grade": 3}]
+    },
+    {
+      "id": "case-t2i-001",
+      "task": "text_to_image",
+      "query": {"text": "bridge eval probe query alpha"},
+      "scope": {"agent_id": "eval", "project_id": "eval", "channel": "demo"},
+      "relevant": [],
+      "note": "empty qrels by design: with the fake embedder EVERY text query is below_threshold, so this case exercises the missing_qrels exclusion path. With the real model, supply graded qrels from human labels (docs/07 Track C)."
+    },
+    {
+      "id": "case-i2i-001",
+      "task": "image_to_image",
+      "query": {"fixture": "fx-green"},
+      "scope": {"agent_id": "eval", "project_id": "eval", "channel": "demo"},
+      "relevant": [{"asset_ref": "fx-green", "grade": 3}]
+    }
+  ]
+}

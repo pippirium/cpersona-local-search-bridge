@@ -365,3 +365,75 @@ def test_folders_array_ok():
             assert client.folders() == [{"id": 77, "watch": True}]
         finally:
             client.close()
+
+
+def test_search_media_multipart_shape_and_never_retried():
+    """POST /api/search/media (eval's image→image path) is a SEARCH: same
+    multipart contract (file + tab=image + folder_id) and the never-retried
+    rule as text search (T-07)."""
+    import tempfile
+
+    import httpx
+
+    from bridge.client import LocalSearchClient
+    from bridge.config import validate_config
+
+    calls: list[httpx.Request] = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(500, json={"error": {
+                "code": "internal_error", "message": "…", "field": None}})
+        raise AssertionError("search must never be retried")
+
+    with tempfile.TemporaryDirectory() as td:
+        cfg = validate_config(data_dir=Path(td) / "d",
+                              provider_base_url="http://127.0.0.1:18765")
+        client = LocalSearchClient(cfg)
+        client._client = httpx.Client(transport=httpx.MockTransport(handler),
+                                      base_url=cfg.provider_base_url)
+        try:
+            with pytest.raises(BridgeError) as ei:
+                client.search_media(b"\x89PNG fake", filename="fx.png",
+                                    folder_id=7, page_size=20)
+            # unmapped provider codes are incompatibilities by design —
+            # 'internal_error' is not in the map (a real 500 would carry a
+            # templated code; either way, exactly one request left the client)
+            assert ei.value.provider_code == "internal_error"
+            assert len(calls) == 1
+            body = calls[0].content
+            assert b'name="file"' in body and b"fx.png" in body
+            assert b'name="tab"' in body and b"image" in body
+            assert b'name="folder_id"' in body and b"7" in body
+        finally:
+            client.close()
+
+
+def test_search_media_ok_envelope():
+    import tempfile
+
+    import httpx
+
+    from bridge.client import LocalSearchClient
+    from bridge.config import validate_config
+
+    def handler(request):
+        assert request.url.path == "/api/search/media"
+        return httpx.Response(200, json={"search_id": "s", "generation": 1,
+                                         "took_ms": 5, "items": [
+                                             {"file_id": 3}],
+                                         "next_cursor": None, "remaining": 0,
+                                         "empty_reason": None})
+
+    with tempfile.TemporaryDirectory() as td:
+        cfg = validate_config(data_dir=Path(td) / "d",
+                              provider_base_url="http://127.0.0.1:18765")
+        client = LocalSearchClient(cfg)
+        client._client = httpx.Client(transport=httpx.MockTransport(handler),
+                                      base_url=cfg.provider_base_url)
+        try:
+            data = client.search_media(b"x", filename="a.png")
+            assert data["items"] == [{"file_id": 3}]
+        finally:
+            client.close()
