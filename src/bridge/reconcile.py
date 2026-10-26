@@ -34,6 +34,7 @@ from bridge.provider import ProviderPort
 from bridge.repository import Repository, StorageError
 from bridge.statemachine import apply_transition, verdict_from_detail, verdict_from_fault
 
+RECENT_PAGE_MAX = 100  # provider RECENT_MAX (docs/10): newest-only, no paging
 MAX_BINDS_PER_RUN = 50  # one call is a bounded page, not an unbounded scan
 
 
@@ -92,8 +93,13 @@ def resolve_pending(
         return report
 
     try:
-        inventory = provider.list_folder(
-            config.managed_folder_id, limit=1000)
+        # RECENT_MAX=100: /api/files/recent answers at most the 100 newest
+        # indexed files and cannot page further. Ambiguity checks are thus
+        # sound WITHIN the recent page: if the page is full, the entry count
+        # is at the provider's cap and we treat size matches as ambiguous —
+        # never bind from a page we know we cannot fully survey.
+        inventory = provider.folder_entries(
+            config.managed_folder_id, limit=RECENT_PAGE_MAX)
     except BridgeError as exc:
         report.waiting = [
             {"asset_id": p["asset_id"], "reason": "provider_" + exc.code}
@@ -118,6 +124,12 @@ def resolve_pending(
             report.waiting.append(
                 {"asset_id": pending["asset_id"], "reason": "not_indexed_yet"})
             continue
+        if len(inventory) >= RECENT_PAGE_MAX:
+            # a full recent page cannot be fully surveyed for same-size
+            # siblings outside the page -> ambiguity, fail closed
+            report.waiting.append(
+                {"asset_id": pending["asset_id"], "reason": "page_full"})
+            continue
         if len(matches) > 1:
             # ambiguous: two same-size copies (identical bytes dedup upstream,
             # so this means foreign files) — never guess (docs/13 fail-closed)
@@ -126,7 +138,9 @@ def resolve_pending(
             continue
         candidate = matches[0]
         file_id = int(candidate["file_id"])
-        # the listing alone is never enough: the detail probe must confirm
+        # the listing alone is never enough: the detail probe must confirm.
+        # recent has no available flag guarantee beyond ResultItem; folder
+        # filter happens client-side, and detail re-checks folder_id.
         try:
             detail = provider.file_detail(file_id)
         except BridgeError as exc:
