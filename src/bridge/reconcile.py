@@ -226,10 +226,6 @@ def revalidate(
             apply_transition(
                 repo, asset_id=asset_id, provider_instance_id=pid,
                 src=src, dst=dst,
-                last_seen_mtime=detail.get("mtime"),
-                last_seen_size=(None if detail.get("size") is None
-                                else int(detail["size"])),
-                last_seen_name=detail.get("name"),
             )
             report.transitions.append({"asset_id": asset_id,
                                        "src": src, "dst": dst})

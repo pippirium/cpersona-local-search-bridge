@@ -44,3 +44,7 @@ This log separates **approved current facts** from **proposed implementation pol
 - Record new D-IDs when contract, security, data retention or scope changes. Update requirements/architecture/API/tickets in the same PR.
 - Do not assert completion without tests and a recorded acceptance run.
 - The user has authorized this initial plan/README PR and **Squash Merge**. This does not authorize future implementation changes to CPersona or local-search.
+
+## D-21 — Trusted evidence survives refusals (B-09/B-12, #39)
+
+Demotion to stale/missing/incompatible never refreshes trusted identity columns. Metadata-only revalidation may change status but cannot replace the fetch evidence; a later fetch must still pass its original identity gate. Repeated registration of a resolved locator preserves its evidence. Incompatible remains terminal for get/import failure transitions. No schema migration is needed; rollback restores code only, but cannot repair evidence already overwritten by older versions: operators must explicitly re-establish affected associations.

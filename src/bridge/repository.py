@@ -372,21 +372,7 @@ class Repository:
                             " last_seen_size, status, verified_at)"
                             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                             " ON CONFLICT (asset_id, provider_instance_id)"
-                            " DO UPDATE SET"
-                            " provider_generation=excluded.provider_generation,"
-                            " provider_folder_id=COALESCE("
-                            " excluded.provider_folder_id,"
-                            " provider_locators.provider_folder_id),"
-                            " last_seen_kind=COALESCE(excluded.last_seen_kind,"
-                            " provider_locators.last_seen_kind),"
-                            " last_seen_name=COALESCE(excluded.last_seen_name,"
-                            " provider_locators.last_seen_name),"
-                            " last_seen_mtime=COALESCE(excluded.last_seen_mtime,"
-                            " provider_locators.last_seen_mtime),"
-                            " last_seen_size=COALESCE(excluded.last_seen_size,"
-                            " provider_locators.last_seen_size),"
-                            " status=excluded.status,"
-                            " verified_at=excluded.verified_at",
+                            " DO NOTHING",
                             (asset_id, provider_instance_id, provider_file_id,
                              provider_generation, provider_folder_id,
                              last_seen_kind, last_seen_name, last_seen_mtime,
@@ -614,6 +600,9 @@ class Repository:
         with self.lock:
             if status not in LOCATOR_STATUSES:
                 raise StorageError("invalid locator status")
+            # Rejected observations must never become trusted identity evidence.
+            if status != "ready":
+                provider_generation = last_seen_mtime = last_seen_size = last_seen_name = None
             with self._conn:
                 cur = self._conn.execute(
                     "UPDATE provider_locators SET status=?,"

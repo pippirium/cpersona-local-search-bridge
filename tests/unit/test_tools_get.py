@@ -401,3 +401,41 @@ def test_mtime_drift_generation_ok_name_match_serves(repo):
     from mcp.server.mcpserver.utilities.types import Image
 
     assert isinstance(res, Image)
+
+
+def test_rejected_evidence_survives_retries_revalidation_and_restart(tmp_path):
+    from bridge.config import validate_config
+    from bridge.reconcile import revalidate
+    from bridge.audit import reconcile
+    from mcp.server.mcpserver.utilities.types import Image
+
+    prov = FakeProvider(files={1: png_file()})
+    r = Repository(open_repository(tmp_path))
+    aid = make_link(r, prov, provider_generation="1")
+    original = r.asset(aid, P)
+    prov.generation = 2
+    prov.files[1].mtime = "2026-10-05T00:00:00Z"
+    prov.files[1].name = "replacement.png"
+    config = validate_config(data_dir=tmp_path,
+                             provider_base_url="http://127.0.0.1:18765")
+    for attempt in range(3):
+        assert get(r, prov, aid).error["code"] == "asset_unavailable"
+        if attempt == 0:
+            r.close()
+            r = Repository(open_repository(tmp_path))
+        ev = r.locator_evidence_for_file(P, 1)[0]
+        revalidate(provider=prov, repo=r, config=config,
+                   assets=[{"asset_id": aid, "evidence": ev}])
+        reconcile(provider=prov, repo=r, config=config, apply=True)
+        make_link(r, prov, provider_generation="2")
+        for key in ("last_seen_mtime", "last_seen_size", "last_seen_name",
+                    "provider_generation", "provider_file_id"):
+            assert r.asset(aid, P)[key] == original[key]
+    assert not [c for c in prov.calls if c[0] == "content"]
+    prov.files[1] = png_file()
+    prov.generation = 1
+    assert isinstance(get(r, prov, aid), Image)
+    r.set_locator_status(asset_id=aid, provider_instance_id=P, status="incompatible")
+    assert get(r, prov, aid).error["code"] == "asset_unavailable"
+    assert r.asset(aid, P)["locator_status"] == "incompatible"
+    r.close()

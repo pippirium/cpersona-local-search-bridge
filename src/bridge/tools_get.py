@@ -183,6 +183,8 @@ def get_asset(
             # linked but never resolved to a provider file (pending): this is
             # unavailable — NOT a license to guess a file (docs/03 invariant).
             return fail("asset_unavailable", aid=asset_id)
+        if asset["locator_status"] == "incompatible":
+            return fail("asset_unavailable", aid=asset_id)
         if asset["media_kind"] != "image":
             return fail("unsupported_media", aid=asset_id)
 
@@ -201,12 +203,9 @@ def get_asset(
         if detail.get("kind") != "image" or not detail.get("available", True):
             # stale/missing: transition the locator truthfully and stop.
             try:
-                repo.set_locator_status(
-                    asset_id=asset_id, provider_instance_id=provider_instance_id,
-                    status="missing",
-                    last_seen_size=detail.get("size"),
-                    last_seen_mtime=detail.get("mtime"),
-                    last_seen_name=detail.get("name"),
+                apply_transition(
+                    repo, asset_id=asset_id, provider_instance_id=provider_instance_id,
+                    src=asset["locator_status"], dst="missing",
                 )
             except Exception:
                 pass
