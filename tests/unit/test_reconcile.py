@@ -57,7 +57,8 @@ def provider_sees_copy(prov, asset, fid=900):
     prov.files[fid] = FakeFile(
         file_id=fid, kind="image",
         name=asset["relative_managed_path"].split("/")[-1],
-        folder_id=77, size=asset["size_bytes"],
+        folder_id=77, rel_dir=asset["relative_managed_path"].rsplit("/", 1)[0],
+        size=asset["size_bytes"],
         mtime="2026-10-26T08:00:00+09:00")
 
 
@@ -119,7 +120,7 @@ def test_resolution_never_uses_search(env):
 
 # ---- fail-closed ambiguity ---------------------------------------------------------------------
 
-def test_ambiguous_size_never_binds(env):
+def test_ambiguous_identity_never_binds(env):
     repo, prov, config = env
     aid = imported(repo, prov, config)
     asset = repo.asset(aid, P)
@@ -127,10 +128,11 @@ def test_ambiguous_size_never_binds(env):
     # foreign file, same size, same folder: ambiguity -> refuse
     prov.folder_files[77].append(901)
     prov.files[901] = FakeFile(file_id=901, size=asset["size_bytes"],
-                               folder_id=77, name="foreign.png")
+                               folder_id=77, name=prov.files[900].name,
+                               rel_dir=prov.files[900].rel_dir)
     rep = resolve_pending(provider=prov, repo=repo, config=config)
     assert rep.bound == []
-    assert any(w["reason"] == "ambiguous_size" for w in rep.waiting)
+    assert any(w["reason"] == "ambiguous_identity" for w in rep.waiting)
     assert repo.locator_status(aid, P) == "pending"
 
 
@@ -139,7 +141,10 @@ def test_detail_disagrees_with_listing_no_bind(env):
     aid = imported(repo, prov, config)
     asset = repo.asset(aid, P)
     provider_sees_copy(prov, asset)
-    prov.files[900].available = False  # listing says present, detail says gone
+    original_detail = prov.file_detail
+    def detail(fid):
+        return dict(original_detail(fid), available=False)
+    prov.file_detail = detail  # listing says present, detail says gone
     rep = resolve_pending(provider=prov, repo=repo, config=config)
     assert rep.bound == []
     assert any(w["reason"] == "detail_mismatch" for w in rep.waiting)
@@ -151,6 +156,9 @@ def test_foreign_folder_candidate_rejected(env):
     asset = repo.asset(aid, P)
     provider_sees_copy(prov, asset)
     prov.files[900].folder_id = 42  # detail: not our managed folder
+    rep = resolve_pending(provider=prov, repo=repo, config=config)
+    assert rep.bound == []
+    assert repo.locator_status(aid, P) == "pending"
 
 
 # ---- disconnect / restart (切断・再起動) -----------------------------------------------------
@@ -267,7 +275,8 @@ def test_two_pending_one_file_binds_exactly_one(tmp_path):
             provider_folder_id=77, last_seen_kind="image",
             last_seen_size=len(PNG), status="pending")
     # second pending DIFFERENT size: only the first matches this one file
-    prov.files[900] = FakeFile(file_id=900, size=len(PNG), folder_id=77)
+    prov.files[900] = FakeFile(file_id=900, size=len(PNG), folder_id=77,
+                               name="x.png", rel_dir="00")
     prov.folder_files = {77: [900]}
     rep = resolve_pending(provider=prov, repo=repo, config=config)
     assert len(rep.bound) == 1
@@ -310,3 +319,47 @@ def test_report_log_shape_has_no_paths(env):
     aid = imported(repo, prov, config)
     rep = resolve_pending(provider=prov, repo=repo, config=config)
     assert str(config.managed_root) not in repr(rep)
+
+
+def test_foreign_same_size_does_not_bind_but_correct_copy_does(env):
+    repo, prov, config = env
+    aid = imported(repo, prov, config)
+    asset = repo.asset(aid, P)
+    provider_sees_copy(prov, asset)
+    prov.files[900].name = "foreign.png"
+    before = len([c for c in prov.calls if c[0] == "content"])
+    rep = resolve_pending(provider=prov, repo=repo, config=config)
+    assert rep.bound == []
+    assert repo.locator_status(aid, P) == "pending"
+    provider_sees_copy(prov, asset, fid=901)
+    rep = resolve_pending(provider=prov, repo=repo, config=config)
+    assert rep.bound == [{"asset_id": aid, "file_id": 901}]
+    assert len([c for c in prov.calls if c[0] == "content"]) == before
+
+
+@pytest.mark.parametrize("field,value", [
+    ("name", "foreign.png"), ("rel_dir", "wrong-shard"),
+    ("folder_id", 88), ("kind", "video"), ("available", False),
+    ("size", 1), ("status", "error"),
+])
+def test_listing_detail_race_preserves_pending(env, field, value):
+    repo, prov, config = env
+    aid = imported(repo, prov, config)
+    provider_sees_copy(prov, repo.asset(aid, P))
+    original_detail = prov.file_detail
+    def detail(fid):
+        return dict(original_detail(fid), **{field: value})
+    prov.file_detail = detail
+    rep = resolve_pending(provider=prov, repo=repo, config=config)
+    assert rep.bound == []
+    assert rep.waiting == [{"asset_id": aid, "reason": "detail_mismatch"}]
+    assert repo.locator_status(aid, P) == "pending"
+
+
+def test_wrong_listing_shard_never_binds(env):
+    repo, prov, config = env
+    aid = imported(repo, prov, config)
+    provider_sees_copy(prov, repo.asset(aid, P))
+    prov.files[900].rel_dir = "wrong-shard"
+    assert not resolve_pending(provider=prov, repo=repo, config=config).bound
+    assert repo.locator_status(aid, P) == "pending"

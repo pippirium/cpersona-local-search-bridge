@@ -57,7 +57,8 @@ class ProviderPort(Protocol):
                 else:
                     out.append({"file_id": fid, "kind": f.kind, "name": f.name,
                                 "rel_dir": f.rel_dir, "size": f.size,
-                                "mtime": f.mtime})
+                                "folder_id": f.folder_id, "status": f.status,
+                                "available": f.available, "mtime": f.mtime})
             return out
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
@@ -232,7 +233,8 @@ class FakeProvider:
                 else:
                     out.append({"file_id": fid, "kind": f.kind, "name": f.name,
                                 "rel_dir": f.rel_dir, "size": f.size,
-                                "mtime": f.mtime})
+                                "folder_id": f.folder_id, "status": f.status,
+                                "available": f.available, "mtime": f.mtime})
             return out
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
