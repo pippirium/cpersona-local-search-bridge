@@ -1,4 +1,4 @@
-# 15 — B-13 live provider audit log (real local-search, three processes)
+# 15 — B-13 historical live provider audit log (real HTTP, fake embedder)
 
 Date: 2026-10-26. Provider: local-search `31f31048fb8edeedf0f94d295bc0c9471000920a`
 (v0.1.1, the D-14 pin) started **explicitly for this audit** with:
@@ -39,9 +39,12 @@ tool shapes, DB-touching steps left to operator environments).
   T-13).
 - `src/bridge/reconcile.py`: RECENT_PAGE_MAX=100; a full recent page cannot
   be fully surveyed for same-size siblings → `page_full`, fail closed.
-- `src/bridge/tools_link.py`: link captures the **live** index generation
-  from `GET /api/status` as identity evidence (the B-09 TODO closed) — the
-  generation-swap reality (#5) makes the gen-unchanged waiver meaningful.
+- Historical claim corrected (#44): current `link_asset` accepts generation
+  only as an internal argument; the MCP wrapper does not capture it. External
+  links created through MCP therefore cannot use the generation edit waiver.
+  They still require matching stored name/size/mtime (docs/11). Managed imports
+  capture generation separately. This is a conservative runtime limitation,
+  not evidence that the originally claimed generation capture ran.
 - `tests/integration/test_live_provider_contract.py`: all of the above as
   opt-in tests (skip without `BRIDGE_LIVE_BASE_URL`; never start the
   provider; only synthetic files in an operator-registered test folder).
@@ -55,3 +58,5 @@ tool shapes, DB-touching steps left to operator environments).
 - DNS-rebinding/Host guard tests: provider-side property, owned by
   local-search's own test suite; only "Bridge requests pass the guard" was
   exercised (all live calls succeeded with `Host: 127.0.0.1:<port>`).
+
+Current contracts supersede this historical audit: D-21–D-25 preserve trusted evidence, enforce independent fetch gates, bind managed copies by name/shard and retain raw inventory completeness. The recorded provider run predates those patches; their validation is offline synthetic/MockTransport, not a newly executed live audit. A real CPersona three-process run has not been performed.

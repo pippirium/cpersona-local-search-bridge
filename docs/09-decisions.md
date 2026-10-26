@@ -28,7 +28,7 @@ This log separates **approved current facts** from **proposed implementation pol
 ## Verified source observations (as of 2026-10-26)
 - pippirium/local-search: Python FastAPI backend with model worker and local-search API; text/media search; file ID metadata and original bytes routes; local-only listener/guard; LanceDB plus SQLite; production index evaluator. The original files are read-only.
 - pippirium/CPersona: fork-specific AGENTS.md prohibits upstream PR/push, production memory mutation, and automatic image bytes in normal recall; poc/embedding/README.md already describes an isolated Jina-v5-nano vs EmbeddingGemma 2 smoke comparison (ten synthetic questions and one image inference).
-- The current bridge repository started empty. Its planning docs do **not** imply a working integration.
+- Historical baseline: this repository started empty. Current implemented status and remaining validation gates are in README; planning-era proposals alone are not completion evidence.
 - The two codebases are independently maintained. API contracts and versions must be pinned to actual commits before B-04.
 
 ## Open decisions / pre-M1 gates
@@ -64,3 +64,7 @@ Client-side folder filtering must retain raw_count and truncated in FolderInvent
 ## D-25 — Deduplicated import preserves locator state (B-10/B-11, #43)
 
 Reusing a managed digest adds only an idempotent scoped link. Existing locator identity, status and verification timestamp survive unchanged; response reports the actual status, including stale/missing/incompatible. Only a new provider locator is initialized pending. Repository initialization conflicts preserve locators, and pending with a resolved file ID is rejected. No schema migration: existing inconsistent rows from older versions need explicit operator review, not automatic rebinding or evidence reset. Code rollback is a revert; metadata backup/restore follows RUNBOOK.
+
+## D-26 — Current documentation and historical evidence (B-15, #44)
+
+README and docs/04 describe current development runtime, docs/06 preserves original acceptance scope, and GitHub issue states/merged PRs track delivery. Historical D-IDs/audit runs remain labeled historical and cannot prove later fixes or unexecuted full integration. Corrected startup requires explicit src on PYTHONPATH; pytest configuration does not configure server startup. No release, real-model quality, fresh-Mac install or real CPersona three-process success is claimed. External MCP link generation capture remains absent, conservatively disabling its edit waiver.

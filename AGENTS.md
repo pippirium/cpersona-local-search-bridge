@@ -41,4 +41,4 @@ Implement a thin, opt-in MCP adapter that associates CPersona's textual memories
 Contract and tests updated; error handling and data isolation verified; security invariants preserved; documentation and migration/rollback updated where relevant; PR review performed; status reported with actual commands and results. Do not claim checks ran unless they did.
 
 ## Current status
-Planning only. No working MCP adapter, no asset import tool and no released version exist yet.
+Development version 0.0.0: stdio MCP with nine tools, opt-in managed import, reconciliation, evaluation CLI and runbook are implemented. No released version exists. Real-model quality, fresh-Mac install and full three-process CPersona integration remain unverified; README and merged PR evidence track current status.

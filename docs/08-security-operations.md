@@ -29,7 +29,7 @@ The frozen M1 policy (B-03) is [docs/12-threat-model-media-policy.md](12-threat-
 | Partial write/crash | SQLite transaction and atomic copy; restart reconciliation | Kill/restart at each simulated stage |
 | Provider outage | Typed dependency error, preserve original metadata | Stubbed timeout/connectivity tests |
 
-## First-run (future runtime implementation)
+## First-run (implemented development runtime)
 1. Install a supported Python version and dependencies from a pinned lockfile.
 2. Start local-search separately using its documented startup procedure; confirm its model/index health.
 3. Configure an isolated Bridge data directory **outside** either provider's internal data directory.
@@ -37,7 +37,7 @@ The frozen M1 policy (B-03) is [docs/12-threat-model-media-policy.md](12-threat-
 5. Run bridge_health and a dry-run with synthetic memory/file IDs from a disposable corpus.
 6. Explicitly link an indexed image, list/search its reference and explicitly fetch that image.
 7. Verify no source file modification and no sensitive strings logged.
-These are **future instructions**; there is no runnable Bridge service at the planning stage.
+The runnable stdio service and nine tools are implemented. Follow [RUNBOOK](../operations/RUNBOOK.md) for exact commands/configuration and recorded rehearsal limits. Fresh-Mac install and full three-process integration remain unverified. `bridge_health` is readiness information, not a security certification.
 
 ## Backup/restore and deletion
 - Metadata: use SQLite online backup in a quiescent or consistent snapshot; account for WAL and migration version.

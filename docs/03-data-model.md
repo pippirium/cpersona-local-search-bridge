@@ -14,7 +14,9 @@ Images stay at original local-search indexed file paths for M1 (read-only). M2 c
 - managed: bridge owns a safely copied file; external: original is retained by a user-selected indexed folder. Deleting a link never deletes either.
 - locator_state: pending, ready, stale, missing, incompatible. A stale reference is reported rather than silently remapped.
 
-## Proposed SQLite schema (design, not executed yet)
+## Original planning DDL (historical; use migration 1)
+
+The block below is the original design, not the current complete schema. Runtime uses [migration 1](../migrations/0001_v1.sql), [docs/11](11-id-schema-scope.md) and `src/bridge/repository.py`.
 
 ~~~sql
 PRAGMA foreign_keys = ON;

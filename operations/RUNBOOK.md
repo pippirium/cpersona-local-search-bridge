@@ -28,8 +28,9 @@ cd cpersona-local-search-bridge
 uv sync                 # python 3.12 + mcp + httpx (dev: pytest)
 ```
 
-No package install is needed to run: everything runs via `uv run` from the
-checkout (`pythonpath=["src"]` + root `bridge_policy.py` are the layout).
+No package install is needed. From the checkout root run
+`PYTHONPATH=src uv run python -m bridge.server`.
+Pytest's `pythonpath=["src"]` setting applies only to tests, not server startup.
 
 ## 2. Start local-search and register the watched folder (operator, once)
 
@@ -45,8 +46,9 @@ curl -s -X POST -H "Host: 127.0.0.1:18765" -H "Content-Type: application/json" \
 ```
 
 The Bridge NEVER calls folder write endpoints; this step is yours. Keep
-the folder dedicated: pending resolution's size-join is only sound inside
-a folder no one else writes to (docs/15 limitation).
+the folder dedicated. Pending resolution compares stored basename, shard,
+folder, kind and size against listing and fresh detail; a full raw recent
+page remains pending (D-23/D-24). No content is fetched to bind.
 
 ## 3. MCP host registration
 
@@ -60,6 +62,7 @@ stdio only (docs/12 §1). Example for a generic MCP client config:
       "args": ["run", "--directory", "/ABS/PATH/cpersona-local-search-bridge",
                "-m", "bridge.server"],
       "env": {
+        "PYTHONPATH": "/ABS/PATH/cpersona-local-search-bridge/src",
         "BRIDGE_DATA_DIR": "/ABS/PATH/bridge-data",
         "BRIDGE_PROVIDER_URL": "http://127.0.0.1:18765",
         "BRIDGE_MANAGED_ROOT": "/ABS/PATH/bridge-managed",
@@ -77,7 +80,7 @@ Environment keys (src/bridge/config.py validates all of them at startup):
 | `BRIDGE_DATA_DIR` | Bridge SQLite (metadata only). Created 0700 |
 | `BRIDGE_PROVIDER_URL` | loopback literal only (`http://127.0.0.1:<port>`) |
 | `BRIDGE_PROVIDER_INSTANCE_ID` | optional; defaults to the URL authority |
-| `BRIDGE_SOURCE_INSTANCE_ID` | which CPersona instance your links belong to (D-16; set it if you run >1) |
+| `BRIDGE_SOURCE_INSTANCE_ID` | validated configuration metadata; MCP scope arguments still default to empty. Pass `source_instance_id` explicitly and identically on each scoped tool call for multiple instances |
 | `BRIDGE_MANAGED_ROOT` + `BRIDGE_MANAGED_FOLDER_ID` | managed import opt-in, all-or-nothing; root must be 0700, `managed_folder_id` = the id from step 2 |
 
 `bridge_health` answers `managed_enabled`, `managed_folder_registered`,
