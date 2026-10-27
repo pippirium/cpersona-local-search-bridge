@@ -127,3 +127,15 @@ content hashes; it neither returns media bytes nor creates a stored query.
 Provider snapshots are limited to five pages and stale or incompatible identity
 fails closed. The SDK emits unused response fields as null or empty arrays; the
 contract allows those without allowing partial results on errors.
+
+## D-36 — Explicit image-to-memory association (IMG-07, #61)
+
+An operator-approved host supplies a CPersona-returned reference and an owned
+asset ID or selected discovery token. Bridge checks syntax, scope and current
+content identity, and commits a link and retry record atomically; it cannot
+prove CPersona reference existence or authenticate the host's approval. Pending
+links do not promise availability. Candidate-created external assets store the
+verified digest, which both explicit fetch and linked search recheck. Historical
+external assets without a digest are not rebound through candidate selection.
+Safety checks precede retry replay, so a changed or unavailable source fails
+closed even when the request key was previously successful.

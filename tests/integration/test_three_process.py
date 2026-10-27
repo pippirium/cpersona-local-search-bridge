@@ -29,11 +29,11 @@ CP_PYTHON = os.environ.get("BRIDGE_THREE_PROCESS_CPERSONA_PYTHON")
 LS_COMMAND = os.environ.get("BRIDGE_THREE_PROCESS_LOCAL_SEARCH")
 
 
-def _png() -> bytes:
+def _png(color=(240, 10, 10)) -> bytes:
     def chunk(tag, data):
         return (struct.pack(">I", len(data)) + tag + data
                 + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff))
-    raw = (b"\x00" + bytes([240, 10, 10]) * 16) * 16
+    raw = (b"\x00" + bytes(color) * 16) * 16
     return (b"\x89PNG\r\n\x1a\n"
             + chunk(b"IHDR", struct.pack(">IIBBBBB", 16, 16, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
@@ -120,7 +120,8 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                         "CPERSONA_DB_PATH": str(tmp_path / "cpersona.db"),
                         "CPERSONA_EMBEDDING_MODE": "none",
                         "CPERSONA_VECTOR_SEARCH_MODE": "local",
-                        "CPERSONA_OPERATING_CONTEXT": "off", "CPERSONA_TRANSPORT": "stdio"})
+                        "CPERSONA_OPERATING_CONTEXT": "off", "CPERSONA_TRANSPORT": "stdio",
+                        "CPERSONA_UPDATE_CHECK": "false"})
                 bridge = StdioServerParameters(command=sys.executable,
                     args=["-m", "bridge.server"], cwd=str(ROOT), env={**env,
                         "PYTHONPATH": str(ROOT / "src"),
@@ -140,7 +141,11 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     saved = _payload(await memory.call_tool("store", {
                                         **scope, "content": "合成テスト 赤い画像 integration probe"}))
                                     assert saved["result"] == "stored" and saved["ok"]
-                                    ref = f"mem:{saved['id']}"
+                                    recalled = _payload(await memory.call_tool("recall", {**scope, "query": "integration"}))
+                                    refs = [entry.get("ref") for entry in recalled.get("messages", [])
+                                            if "integration probe" in entry.get("content", "") and entry.get("ref")]
+                                    assert refs, "real CPersona must return a reference for the stored memory"
+                                    ref = refs[0]
                                     link = _payload(await assets.call_tool("link_asset", {
                                         **scope, "memory_ref": ref, "provider_file_id": source_id}))
                                     assert link["ok"] and link["link_status"] == "ready"
@@ -177,6 +182,31 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     assert again["asset_id"] == copied["asset_id"] and again["link_status"] == "ready"
                                     image = await assets.call_tool("get_asset", {**scope, "asset_id": copied["asset_id"]})
                                     assert base64.b64decode(image.content[0].data) == media
+                                    # Explicit new-image link with a ref returned by real CPersona.
+                                    new_media = _png((10, 10, 240))
+                                    new = _payload(await assets.call_tool("ingest_image", {
+                                        **scope, "image_base64": base64.b64encode(new_media).decode()}))
+                                    assert new["ok"] and new["ingest_status"] == "pending"
+                                    associated = _payload(await assets.call_tool("link_registered_asset", {
+                                        **scope, "memory_ref": ref, "asset_id": new["asset_id"]}))
+                                    assert associated["ok"] and associated["link_status"] == "pending"
+                                    listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
+                                    assert new["asset_id"] in [entry["asset_id"] for entry in listed["assets"]]
+                                    deadline = time.monotonic() + 30
+                                    while time.monotonic() < deadline:
+                                        resolved = _payload(await assets.call_tool("resolve_pending_assets", {}))
+                                        if any(b["asset_id"] == new["asset_id"] for b in resolved["bound"]):
+                                            break
+                                        await anyio.sleep(0.1)
+                                    else:
+                                        pytest.fail("new managed image did not resolve")
+                                    fetched = await assets.call_tool("get_asset", {**scope, "asset_id": new["asset_id"]})
+                                    assert base64.b64decode(fetched.content[0].data) == new_media
+                                    removed_new = _payload(await assets.call_tool("unlink_asset", {
+                                        **scope, "memory_ref": ref, "asset_id": new["asset_id"]}))
+                                    assert removed_new["unlinked"]
+                                    listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
+                                    assert new["asset_id"] not in [entry["asset_id"] for entry in listed["assets"]]
                                     _stop(process)
                                     outage = _payload(await assets.call_tool("get_asset", {**scope, "asset_id": aid}))
                                     assert outage["error"]["code"] == "dependency_unavailable"

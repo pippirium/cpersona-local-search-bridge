@@ -76,6 +76,7 @@ def search_assets(
     query: str,
     limit: int = 10,
     folder_id: int | None = None,
+    max_fetch_bytes: int = 8_000_000,
 ) -> SearchAssetsResult:
     try:
         query = str(query)
@@ -133,10 +134,21 @@ def search_assets(
                     continue  # linked elsewhere or unlinked: invisible (T-02)
                 seen.add(asset_id)
                 asset = repo.asset(asset_id, provider_instance_id)
+                if asset and asset.get("content_sha256"):
+                    # Content-addressed links must not be represented by a
+                    # replacement that merely reuses a provider file ID.
+                    from bridge.tools_image_search import _linked_identity
+                    generation = (st.get("index") or {}).get("generation")
+                    if (generation is None or not _linked_identity(provider=provider,
+                            max_fetch_bytes=max_fetch_bytes, asset=asset, item=item, generation=str(generation))):
+                        provider_warning = "asset_unavailable"
+                        continue
                 refs = repo.links_for_asset(
                     source_instance_id=source_instance_id, agent_id=agent_id,
                     project_id=project_id, channel=channel, asset_id=asset_id,
                 )
+                if not refs:
+                    continue
                 out.append(SearchAssetEntry(
                     asset_id=asset_id,
                     provider_file_id=(asset or {}).get("provider_file_id"),
@@ -156,8 +168,8 @@ def search_assets(
         # ---- coverage truth ----------------------------------------------------
         # exact requires: provider pages fully exhausted AND we consumed the
         # whole candidate list without the limit cutting anything below it.
-        exact = exhausted and len(out) < limit and not _candidates_remain(
-            candidates, out, limit)
+        exact = (exhausted and len(out) < limit and provider_warning != "asset_unavailable"
+                 and not _candidates_remain(candidates, out, limit))
         coverage = "exact" if exact else "partial"
         return SearchAssetsResult(
             ok=True, query=query, results=out, search_coverage=coverage,

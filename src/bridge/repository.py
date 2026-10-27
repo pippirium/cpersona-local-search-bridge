@@ -43,6 +43,14 @@ class RequestConflict(StorageError):
     """An idempotency key was reused for a different operation input."""
 
 
+class IdentityConflict(StorageError):
+    """Live identity or stored locator evidence changed during an operation."""
+
+
+class AssetNotFound(StorageError):
+    """An asset is unknown or outside the caller's exact scope."""
+
+
 class SchemaTooNew(StorageError):
     """Stored user_version exceeds what this code knows: refuse to open."""
 
@@ -558,6 +566,161 @@ class Repository:
                             "locator not pending (already resolved or gone)")
             except sqlite3.IntegrityError:
                 raise StorageError("file already bound to another asset") from None
+
+    def link_owned_image(self, *, scope: tuple[str, str, str, str], asset_id: str,
+                         memory_ref: str, provider_instance_id: str, expected: tuple,
+                         request_id: str | None) -> dict:
+        """Atomically link a verified owner asset without changing its locator."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            if not ASSET_ID_RE.fullmatch(asset_id) or not MEMORY_REF_RE.fullmatch(memory_ref):
+                raise StorageError("invalid identity")
+            fingerprint = hashlib.sha256(json.dumps([asset_id, memory_ref, provider_instance_id],
+                separators=(",", ":")).encode()).hexdigest()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                owner = self._conn.execute(
+                    "SELECT 1 FROM asset_owners WHERE asset_id=? AND source_instance_id=?"
+                    " AND agent_id=? AND project_id=? AND channel=?", (asset_id, *scope)).fetchone()
+                if not owner:
+                    raise AssetNotFound("asset not found")
+                row = self._conn.execute(
+                    "SELECT a.content_sha256,a.relative_managed_path,a.size_bytes,l.status,"
+                    "l.provider_file_id,l.provider_generation,l.provider_folder_id FROM assets a"
+                    " JOIN provider_locators l ON l.asset_id=a.asset_id"
+                    " WHERE a.asset_id=? AND l.provider_instance_id=?", (asset_id, provider_instance_id)).fetchone()
+                if row != expected or row[3] not in ("pending", "ready"):
+                    raise IdentityConflict("identity changed")
+                if request_id is not None:
+                    prior = self._conn.execute(
+                        "SELECT fingerprint,asset_id,deduplicated,initial_status FROM image_requests"
+                        " WHERE source_instance_id=? AND agent_id=? AND project_id=? AND channel=?"
+                        " AND operation='link_registered_asset' AND request_id=?", (*scope, request_id)).fetchone()
+                    if prior:
+                        if prior[0] != fingerprint:
+                            raise RequestConflict("request id conflict")
+                        self._conn.commit()
+                        return {"asset_id": prior[1], "already_linked": bool(prior[2]), "status": prior[3]}
+                old = self._conn.execute(
+                    "SELECT 1 FROM asset_links WHERE source_instance_id=? AND agent_id=? AND project_id=?"
+                    " AND channel=? AND memory_ref=? AND asset_id=?", (*scope, memory_ref, asset_id)).fetchone()
+                if not old:
+                    self._conn.execute("INSERT INTO asset_links(source_instance_id,agent_id,project_id,channel,"
+                        "memory_ref,asset_id,created_at) VALUES(?,?,?,?,?,?,?)", (*scope, memory_ref, asset_id, utc_now()))
+                if request_id is not None:
+                    self._conn.execute("INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,"
+                        "operation,request_id,fingerprint,asset_id,deduplicated,initial_status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        (*scope, "link_registered_asset", request_id, fingerprint, asset_id, int(bool(old)), row[3]))
+                self._conn.commit()
+                return {"asset_id": asset_id, "already_linked": bool(old), "status": row[3]}
+            except StorageError:
+                self._conn.rollback()
+                raise
+            except sqlite3.Error:
+                self._conn.rollback()
+                raise StorageError("link transaction failed") from None
+
+    def link_discovered_image(self, *, scope: tuple[str, str, str, str], memory_ref: str,
+                              provider_instance_id: str, evidence: dict, token: str,
+                              request_id: str | None) -> dict:
+        """Commit a selected candidate's evidence and link in one transaction."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            if not MEMORY_REF_RE.fullmatch(memory_ref):
+                raise StorageError("invalid memory reference")
+            fingerprint = hashlib.sha256(json.dumps([hashlib.sha256(token.encode()).hexdigest(),
+                memory_ref, provider_instance_id], separators=(",", ":")).encode()).hexdigest()
+            file_id, folder = evidence["file_id"], evidence["folder_id"]
+            rel = evidence["rel_dir"] + "/" + evidence["name"]
+            digest = evidence["sha256"]
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                if not self.discovery_visible(scope=scope, provider_instance_id=provider_instance_id,
+                    file_id=file_id, folder_id=folder, relative_path=rel, name=evidence["name"],
+                    size=evidence["size"], mtime=evidence["mtime"], generation=evidence["generation"],
+                    content_sha256=digest):
+                    raise AssetNotFound("asset not found")
+                if request_id is not None:
+                    prior = self._conn.execute(
+                        "SELECT fingerprint,asset_id,deduplicated,initial_status FROM image_requests"
+                        " WHERE source_instance_id=? AND agent_id=? AND project_id=? AND channel=?"
+                        " AND operation='link_registered_asset' AND request_id=?", (*scope, request_id)).fetchone()
+                    if prior:
+                        if prior[0] != fingerprint:
+                            raise RequestConflict("request id conflict")
+                        self._conn.commit()
+                        return {"asset_id": prior[1], "already_linked": bool(prior[2]), "status": prior[3]}
+                ids = list(dict.fromkeys(self.locators_by_file(provider_instance_id, file_id)
+                    + self.owned_assets_for_managed_identity(provider_instance_id=provider_instance_id,
+                                                            folder_id=folder, relative_path=rel)))
+                selected = None
+                for aid in ids:
+                    asset = self.asset(aid, provider_instance_id)
+                    if not asset or asset["locator_status"] not in ("pending", "ready"):
+                        continue
+                    owner = self._conn.execute("SELECT source_instance_id,agent_id,project_id,channel"
+                        " FROM asset_owners WHERE asset_id=?", (aid,)).fetchone()
+                    links = self._conn.execute("SELECT source_instance_id,agent_id,project_id,channel"
+                        " FROM asset_links WHERE asset_id=?", (aid,)).fetchall()
+                    member = (owner is not None and tuple(owner) == scope) or any(tuple(link) == scope for link in links)
+                    if (owner or links) and not member:
+                        continue
+                    if asset["origin"] == "managed":
+                        if (asset["relative_managed_path"] != rel or asset["content_sha256"] != digest
+                                or asset["provider_folder_id"] != folder):
+                            continue
+                        if asset["locator_status"] == "pending" and not owner:
+                            continue
+                        if (asset["locator_status"] == "ready" and
+                                (asset["provider_file_id"] != file_id
+                                 or (asset["provider_generation"] is not None
+                                     and str(asset["provider_generation"]) != evidence["generation"]))):
+                            continue
+                    else:
+                        if (asset["locator_status"] != "ready" or asset["provider_file_id"] != file_id
+                                or asset["last_seen_name"] != evidence["name"]
+                                or asset["last_seen_mtime"] != evidence["mtime"]
+                                or asset["last_seen_size"] != evidence["size"]
+                                or (asset["provider_generation"] is not None
+                                    and str(asset["provider_generation"]) != evidence["generation"])
+                                or not asset["content_sha256"] or asset["content_sha256"] != digest):
+                            continue
+                    selected = (aid, asset["locator_status"])
+                    break
+                if selected is None and ids:
+                    raise IdentityConflict("candidate identity conflict")
+                if selected is None:
+                    import uuid
+                    aid = str(uuid.uuid4())
+                    now = utc_now()
+                    self._conn.execute("INSERT INTO assets(asset_id,origin,media_kind,content_sha256,media_type,"
+                        "size_bytes,created_at,updated_at) VALUES(?, 'external', 'image', ?,?,?,?,?)",
+                        (aid, digest, evidence["media_type"], evidence["size"], now, now))
+                    self._conn.execute("INSERT INTO provider_locators(asset_id,provider_instance_id,provider_file_id,"
+                        "provider_generation,provider_folder_id,last_seen_kind,last_seen_name,last_seen_mtime,"
+                        "last_seen_size,status,verified_at) VALUES(?,?,?,?,?,'image',?,?,?,'ready',?)",
+                        (aid, provider_instance_id, file_id, evidence["generation"], folder, evidence["name"],
+                         evidence["mtime"], evidence["size"], now))
+                    selected = (aid, "ready")
+                aid, status = selected
+                old = self._conn.execute("SELECT 1 FROM asset_links WHERE source_instance_id=? AND agent_id=?"
+                    " AND project_id=? AND channel=? AND memory_ref=? AND asset_id=?",
+                    (*scope, memory_ref, aid)).fetchone()
+                if not old:
+                    self._conn.execute("INSERT INTO asset_links(source_instance_id,agent_id,project_id,channel,"
+                        "memory_ref,asset_id,created_at) VALUES(?,?,?,?,?,?,?)", (*scope, memory_ref, aid, utc_now()))
+                if request_id is not None:
+                    self._conn.execute("INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,"
+                        "operation,request_id,fingerprint,asset_id,deduplicated,initial_status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        (*scope, "link_registered_asset", request_id, fingerprint, aid, int(bool(old)), status))
+                self._conn.commit()
+                return {"asset_id": aid, "already_linked": bool(old), "status": status}
+            except StorageError:
+                self._conn.rollback()
+                raise
+            except sqlite3.Error:
+                self._conn.rollback()
+                raise StorageError("candidate link transaction failed") from None
 
     def discovery_visible(self, *, scope: tuple[str, str, str, str], provider_instance_id: str,
                           file_id: int, folder_id: int, relative_path: str,

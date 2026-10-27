@@ -24,6 +24,7 @@ from bridge.tools_status import IngestStatusResult, get_ingest_status as _status
 from bridge.tools_staging import import_staged_image as _staging_impl
 from bridge.tools_discover import DiscoveryResult, DiscoveryState, discover_assets as _discover_impl
 from bridge.tools_image_search import ImageSearchResult, search_assets_by_image as _image_search_impl
+from bridge.tools_registered_link import RegisteredLinkResult, link_registered_asset as _registered_link_impl
 from bridge.audit import AuditReport, audit as _audit_impl
 from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
@@ -233,6 +234,17 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             query_asset_id=query_asset_id, image_base64=image_base64, project_id=project_id,
             channel=channel, source_instance_id=source_instance_id, folder_id=folder_id, limit=limit)
 
+    @server.tool(name="link_registered_asset", description="Explicitly link a scoped registered image or selected candidate to a CPersona reference.")
+    def _link_registered_asset(agent_id: str, memory_ref: str, asset_id: str | None = None,
+                               candidate_token: str | None = None, project_id: str = "", channel: str = "",
+                               source_instance_id: str = "", client_request_id: str | None = None) -> RegisteredLinkResult:
+        if ctx.db is None:
+            return RegisteredLinkResult(ok=False, error=error_result("storage_error")["error"])
+        return _registered_link_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config, state=ctx.discovery,
+            agent_id=agent_id, memory_ref=memory_ref, asset_id=asset_id, candidate_token=candidate_token,
+            project_id=project_id, channel=channel, source_instance_id=source_instance_id,
+            client_request_id=client_request_id)
+
     # ---- link tools (B-07) ----------------------------------------------------
 
     from bridge.tools_link import link_asset as _link_impl
@@ -329,7 +341,7 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             provider_instance_id=ctx.config.provider_instance_id,
             source_instance_id=source_instance_id, agent_id=agent_id,
             project_id=project_id, channel=channel,
-            query=query, limit=limit, folder_id=folder_id,
+            query=query, limit=limit, folder_id=folder_id, max_fetch_bytes=ctx.config.max_fetch_bytes,
         )
 
     @server.tool(

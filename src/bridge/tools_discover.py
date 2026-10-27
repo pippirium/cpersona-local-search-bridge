@@ -183,7 +183,7 @@ def _evidence(provider: ProviderPort, config: BridgeConfig, item: dict, generati
     if len(data) != item["size"] or _mime_from_magic(data) not in ALLOWED_IMAGE_MIME:
         return None
     try:
-        validate_image(data, max_bytes=config.max_fetch_bytes, max_pixels=config.max_pixels)
+        image = validate_image(data, max_bytes=config.max_fetch_bytes, max_pixels=config.max_pixels)
     except BridgeError as exc:
         if exc.code in ("unsupported_media", "media_too_large", "invalid_request"):
             return None
@@ -197,7 +197,8 @@ def _evidence(provider: ProviderPort, config: BridgeConfig, item: dict, generati
         raise BridgeError("asset_unavailable")
     return {"file_id": item["file_id"], "folder_id": item["folder_id"], "name": item["name"],
             "rel_dir": item["rel_dir"], "size": item["size"], "mtime": item["mtime"],
-            "generation": generation, "sha256": hashlib.sha256(data).hexdigest()}
+            "generation": generation, "sha256": hashlib.sha256(data).hexdigest(),
+            "media_type": image.media_type}
 
 
 def discover_assets(*, provider: ProviderPort, repo: Repository, config: BridgeConfig, state: DiscoveryState,
@@ -338,7 +339,7 @@ def validate_candidate(*, provider: ProviderPort, repo: Repository, config: Brid
         if not isinstance(detail, dict):
             raise BridgeError("index_incompatible")
         if (detail.get("kind") != "image" or not detail.get("available", True)
-                or detail.get("status") not in ("indexed", "pending")
+                or detail.get("status") != "indexed"
                 or any(detail.get(key) != saved[key] for key in ("name", "rel_dir", "size", "mtime", "folder_id"))):
             raise BridgeError("asset_unavailable")
         data, _ = provider.file_content(saved["file_id"], config.max_fetch_bytes)

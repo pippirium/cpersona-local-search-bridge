@@ -126,7 +126,11 @@ replacement that preserves size, name and mtime; this M1 limitation remains.
 `link_registered_asset` accepts a pending owned asset or a selected candidate;
 its successful link does not guarantee availability. The candidate route must
 revalidate evidence before using the existing safe registration/link pathway.
-A unique link is idempotent; asset and link changes are transactional. Existing
+A unique link is idempotent; asset and link changes are transactional. A retry
+with a request key revalidates the source first and fails closed if its identity
+has since become unavailable. Candidate selection refuses to rebind a historical
+external asset that lacks a saved content hash, including an unlinked orphan;
+its old identity cannot safely be reconstructed from file ID alone. Existing
 `unlink_asset` removes a link without deleting source or managed files.
 `get_asset` retains its existing linked-scope, explicit-byte-fetch gates;
 ownership alone does not grant it. Existing `search_assets` and

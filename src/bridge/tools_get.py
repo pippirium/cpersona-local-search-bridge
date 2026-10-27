@@ -273,10 +273,10 @@ def get_asset(
         except BridgeError as exc:
             return fail(exc.code, aid=asset_id)
 
-        # Managed content is immutable: metadata alone cannot detect a same-size
-        # replacement with preserved timestamps. Compare the stored digest before
+        # A stored content digest is immutable evidence: metadata alone cannot
+        # detect a same-size replacement with preserved timestamps. Compare it before
         # returning any bytes; never refresh trusted evidence on mismatch.
-        if asset.get("origin") == "managed" and asset.get("content_sha256"):
+        if asset.get("content_sha256"):
             import hashlib
             if hashlib.sha256(data).hexdigest() != asset["content_sha256"]:
                 try:

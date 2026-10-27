@@ -271,3 +271,19 @@ the query and linked managed candidates internally to verify their hashes.
 At most five provider pages of 20 are scanned; `partial` reports a limit or an
 unavailable scoped result, not a recall measurement. Call `get_asset`
 separately when the user explicitly requests image display.
+
+
+## Explicitly associate an image with a memory
+
+After the user approves an association, the trusted host obtains the actual
+`memory_ref` from CPersona recall/reconstruct and calls `link_registered_asset`
+with either the owner-scoped `asset_id` or an explicitly selected discovery
+`candidate_token`. A pending asset can be linked before indexing, but cannot be
+fetched until it resolves. The Bridge validates reference syntax only; a
+well-formed fabricated reference cannot be distinguished from a real one
+without consulting CPersona, so the host must supply actual returned refs.
+Replays are idempotent only while the identity remains safe; changed content
+or index evidence is refused. Historical external assets without a content
+digest are not rebound through candidate selection; retain the old association
+or investigate and explicitly re-establish it rather than guessing.
+Use `unlink_asset` to remove an association without deleting the image.

@@ -1049,6 +1049,9 @@
             },
             "already_linked": {
               "type": "boolean"
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -1092,6 +1095,18 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "asset_id": {
+              "type": "null"
+            },
+            "memory_ref": {
+              "type": "null"
+            },
+            "link_status": {
+              "type": "null"
+            },
+            "already_linked": {
+              "type": "null"
             }
           },
           "required": [
