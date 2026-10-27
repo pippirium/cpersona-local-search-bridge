@@ -417,6 +417,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 8000000
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -461,6 +464,21 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "asset_id": {
+              "type": "null"
+            },
+            "ingest_status": {
+              "type": "null"
+            },
+            "deduplicated": {
+              "type": "null"
+            },
+            "media_type": {
+              "type": "null"
+            },
+            "size_bytes": {
+              "type": "null"
             }
           },
           "required": [
@@ -507,6 +525,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 8000000
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -551,6 +572,21 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "asset_id": {
+              "type": "null"
+            },
+            "ingest_status": {
+              "type": "null"
+            },
+            "deduplicated": {
+              "type": "null"
+            },
+            "media_type": {
+              "type": "null"
+            },
+            "size_bytes": {
+              "type": "null"
             }
           },
           "required": [

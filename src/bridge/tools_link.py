@@ -85,14 +85,45 @@ def link_asset(
             detail = _check_provider(provider, provider_file_id)
         except StorageError:
             raise BridgeError("invalid_request") from None
+        # A managed input may already be indexed while its Bridge locator is
+        # still pending. Do not create an unowned alias through the legacy path.
+        folder = detail.get("folder_id")
+        directory, name = detail.get("rel_dir"), detail.get("name")
+        if isinstance(folder, int) and isinstance(directory, str) and isinstance(name, str):
+            identity_ids = repo.owned_assets_for_managed_identity(
+                provider_instance_id=provider_instance_id, folder_id=folder,
+                relative_path=directory + "/" + name)
+            bound_ids = repo.locators_by_file(provider_instance_id, provider_file_id)
+            if identity_ids and not set(identity_ids).intersection(bound_ids):
+                scope = (source_instance_id, agent_id, project_id, channel)
+                visible = any(repo.owned_asset(scope=scope, asset_id=aid) for aid in identity_ids)
+                raise BridgeError("asset_unavailable" if visible else "asset_not_found")
         # Reuse an existing binding for this provider file (idempotence across
         # different memories AND repeats of the same call).
         existing = repo.locators_by_file(provider_instance_id, provider_file_id)
         if existing:
-            asset_id = existing[0]
+            # An explicitly ingested asset has an owner even before any link.
+            # Do not reuse another scope's ID through the legacy file-ID tool.
+            owned = [aid for aid in existing if repo.asset_has_owner(asset_id=aid)]
+            if owned:
+                scope = (source_instance_id, agent_id, project_id, channel)
+                visible = [aid for aid in owned if repo.owned_asset(scope=scope, asset_id=aid)]
+                if not visible:
+                    raise BridgeError("asset_not_found")
+                asset_id = visible[0]
+            else:
+                asset_id = existing[0]
             asset = repo.asset(asset_id, provider_instance_id)
             if asset is None:  # pragma: no cover - locator row without asset
                 raise BridgeError("storage_error")
+            if owned:
+                # The caller explicitly requested linking. Never bind a managed
+                # memory reference to bytes that differ from the owned image.
+                import hashlib
+                from bridge_policy import MAX_FETCH_BYTES
+                data, _ = provider.file_content(provider_file_id, MAX_FETCH_BYTES)
+                if hashlib.sha256(data).hexdigest() != asset.get("content_sha256"):
+                    raise BridgeError("asset_unavailable")
             media_kind = asset["media_kind"]
             if media_kind != "image":  # defensive: schema allows video/text
                 raise BridgeError("unsupported_media")

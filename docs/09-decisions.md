@@ -81,3 +81,7 @@ A predeclared 12-query, three-image RGB manifest was run against pinned real Emb
 ## D-30 — Explicit unlinked-image ownership and input contract (IMG-01, #55)
 
 The proposed image APIs use bounded data or an operator-controlled staging handoff and store exact-scope owner evidence independently of memory links. Deduplication must not reveal other-scope ownership; legacy links retain their prior visibility. User approval and CPersona reference provenance are trusted-host responsibilities, not self-asserted authentication. EmbeddingGemma 2, stdio and the existing explicit fetch boundary remain unchanged. [docs/19](19-image-input-contract.md) specifies the design, migration and rollback; this decision does not claim runtime implementation. D-30 is reserved here because the concurrent CP-02 PR uses D-29.
+
+## D-31 — Typed result null fields (IMG-02, #56)
+
+MCP SDK typed result serialization includes unused optional fields as JSON null. The ingest success and error schema allows these null fields while forbidding actual partial results on errors. This corrects the proposed response shape to match the executable wire behavior; it does not change authorization or media-return rules.

@@ -1,6 +1,6 @@
 # 04 — Implemented MCP interface contracts (development 0.0.0)
 
-Runtime source: [server.py](../src/bridge/server.py); typed results are in tools_link/tools_search/tools_get/tools_import, reconcile and audit. The nine tools below are registered on local stdio. These are implemented interfaces, not a release certification; the isolated three-process smoke is recorded separately in docs/16. [README](../README.md) records current evidence and unverified gates.
+Runtime source: [server.py](../src/bridge/server.py); typed results are in tools_link/tools_search/tools_get/tools_import, reconcile and audit. The ten tools below are registered on local stdio. These are implemented interfaces, not a release certification; the isolated three-process smoke is recorded separately in docs/16. [README](../README.md) records current evidence and unverified gates.
 
 ## General rules
 
@@ -17,6 +17,7 @@ Tools do not accept arbitrary source paths or URLs. Normal listing/search return
 | Tool | Inputs beyond scope | Result |
 | --- | --- | --- |
 | bridge_health | no scope; `{}` | bridge/schema version, provider/storage health, managed readiness, warning codes |
+| ingest_image | `image_base64`, optional `client_request_id` | explicit bounded image input; scoped `asset_id`, locator state, deduplication and media metadata |
 | link_asset | `memory_ref`, positive integer `provider_file_id` | `ok`, stable `asset_id`, `link_status`, `media_kind`, optional error |
 | unlink_asset | `memory_ref`, `asset_id` | `ok`, `unlinked`, `remaining_links` in exact scope; never deletes files |
 | search_assets | `query`, `limit=10` (clamped 1..20), optional `folder_id` | `ok`, `query`, `results`, `search_coverage=exact/partial`, `provider_warning`, error |
@@ -26,7 +27,7 @@ Tools do not accept arbitrary source paths or URLs. Normal listing/search return
 | resolve_pending_assets | no scope; `{}` | `ok`, `premise_ready`, `checked`, `bound`, `waiting`, error; bounded explicit pass |
 | audit_assets | no scope; `apply=false` | AuditReport; read-only by default, `apply=true` applies allowed status transitions, never rebinds/deletes |
 
-No `kind`, note, upload, MIME or path argument is registered. Search is image-only, scans up to five provider pages of 20, intersects with exact-scope associations before response, and reports partial when capped. `exact` describes exhausted provider candidate coverage, not a measured semantic recall guarantee. Search entries include IDs, kind/type/size, stored name/status, score and scoped memory refs; list entries are repository metadata.
+No tool accepts a source path or URL; `ingest_image` accepts explicit bounded Base64 image data. Search is image-only, scans up to five provider pages of 20, intersects with exact-scope associations before response, and reports partial when capped. `exact` describes exhausted provider candidate coverage, not a measured semantic recall guarantee. Search entries include IDs, kind/type/size, stored name/status, score and scoped memory refs; list entries are repository metadata.
 
 Link verifies current file kind before creating/reusing an association. Reuse does not replace trusted locator evidence. Current MCP external-link creation does not capture generation, so the indexed-edit waiver is unavailable for those locators. Get checks scope, optional memory membership and fresh identity before fetching; [docs/11 §5](11-id-schema-scope.md) is the complete gate table (D-21/D-22). Unknown/stale identity never authorizes a different file; incompatible is terminal.
 
@@ -79,7 +80,7 @@ B-01 guard note (docs/10-contract-audit.md): the provider's Host/Origin guard ac
 
 ## Proposed image-input contract (IMG-01)
 
-The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). These are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing nine tools above retain their behavior.
+The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). Except for `ingest_image`, these are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing tools retain their linked-only access. Legacy link and indexed-source import refuse to claim an owned image from another scope, including while it is pending; indexed-source import also refuses owned copies in their owner scope. Managed fetch checks its stored hash.
 
 ## Extension points and policy
 - A future CPersona-native integration may consume stable asset refs; it must preserve existing text-only recall default and be done in the user's fork under a separate approved PR.

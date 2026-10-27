@@ -18,6 +18,8 @@
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -37,8 +39,18 @@ class StorageError(Exception):
     """Repository-level failure; carries no paths or SQL text."""
 
 
+class RequestConflict(StorageError):
+    """An idempotency key was reused for a different operation input."""
+
+
 class SchemaTooNew(StorageError):
     """Stored user_version exceeds what this code knows: refuse to open."""
+
+
+def image_request_fingerprint(digest: str, provider_instance_id: str, folder_id: int) -> str:
+    """Pin all effectful ingest inputs, including configured provider and folder."""
+    value = json.dumps([digest, provider_instance_id, folder_id], separators=(",", ":"))
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def utc_now() -> str:
@@ -543,6 +555,111 @@ class Repository:
             except sqlite3.IntegrityError:
                 raise StorageError("file already bound to another asset") from None
 
+    def owned_assets_for_managed_identity(self, *, provider_instance_id: str,
+                                          folder_id: int, relative_path: str) -> list[str]:
+        """Find owned managed copies even before their pending locators bind."""
+        with self.lock:
+            rows = self._conn.execute(
+                "SELECT a.asset_id FROM assets a JOIN asset_owners o ON o.asset_id=a.asset_id"
+                " JOIN provider_locators l ON l.asset_id=a.asset_id"
+                " WHERE l.provider_instance_id=? AND l.provider_folder_id=?"
+                " AND a.relative_managed_path=?", (provider_instance_id, folder_id, relative_path),
+            ).fetchall()
+            return [row[0] for row in rows]
+
+    def owned_asset(self, *, scope: tuple[str, str, str, str], asset_id: str) -> bool:
+        """Owner membership is distinct from link-based access."""
+        with self.lock:
+            normalized = normalize_scope(*scope)
+            return self._conn.execute(
+                "SELECT 1 FROM asset_owners WHERE source_instance_id=? AND agent_id=?"
+                " AND project_id=? AND channel=? AND asset_id=?",
+                (*normalized, asset_id),
+            ).fetchone() is not None
+
+    def asset_has_owner(self, *, asset_id: str) -> bool:
+        with self.lock:
+            return self._conn.execute(
+                "SELECT 1 FROM asset_owners WHERE asset_id=?", (asset_id,),
+            ).fetchone() is not None
+
+    def check_image_request(self, *, scope: tuple[str, str, str, str], request_id: str,
+                            digest: str, provider_instance_id: str, folder_id: int) -> None:
+        """Reject a known conflicting retry before publishing a managed copy."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            prior = self._conn.execute(
+                "SELECT fingerprint FROM image_requests WHERE source_instance_id=? AND agent_id=?"
+                " AND project_id=? AND channel=? AND operation='ingest_image' AND request_id=?",
+                (*scope, request_id),
+            ).fetchone()
+            if prior and prior[0] != image_request_fingerprint(digest, provider_instance_id, folder_id):
+                raise RequestConflict("request id conflict")
+
+    def create_owned_image(self, *, scope: tuple[str, str, str, str],
+                           asset_id: str, digest: str, relative_path: str,
+                           media_type: str, size_bytes: int, provider_instance_id: str,
+                           folder_id: int, request_id: str | None) -> dict:
+        """Atomically create an owned pending asset, or reuse only this scope's copy."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            if not ASSET_ID_RE.fullmatch(asset_id) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise StorageError("invalid identity")
+            fingerprint = image_request_fingerprint(digest, provider_instance_id, folder_id)
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                if request_id is not None:
+                    prior = self._conn.execute(
+                        "SELECT fingerprint, asset_id, deduplicated, initial_status FROM image_requests"
+                        " WHERE source_instance_id=? AND agent_id=? AND project_id=? AND channel=?"
+                        " AND operation='ingest_image' AND request_id=?", (*scope, request_id),
+                    ).fetchone()
+                    if prior:
+                        if prior[0] != fingerprint:
+                            raise RequestConflict("request id conflict")
+                        self._conn.commit()
+                        return {"asset_id": prior[1], "deduplicated": bool(prior[2]), "status": prior[3]}
+                prior_asset = self._conn.execute(
+                    "SELECT a.asset_id, l.status FROM asset_owners o JOIN assets a ON a.asset_id=o.asset_id"
+                    " JOIN provider_locators l ON l.asset_id=a.asset_id AND l.provider_instance_id=?"
+                    " WHERE o.source_instance_id=? AND o.agent_id=? AND o.project_id=? AND o.channel=?"
+                    " AND o.content_sha256=? AND l.provider_folder_id=?", (provider_instance_id, *scope, digest, folder_id),
+                ).fetchone()
+                dedup = prior_asset is not None
+                status = prior_asset[1] if prior_asset else "pending"
+                if dedup:
+                    asset_id = prior_asset[0]
+                else:
+                    now = utc_now()
+                    self._conn.execute(
+                        "INSERT INTO assets(asset_id,origin,media_kind,content_sha256,relative_managed_path,"
+                        "media_type,size_bytes,created_at,updated_at) VALUES(?, 'managed', 'image',?,?,?,?,?,?)",
+                        (asset_id, digest, relative_path, media_type, size_bytes, now, now),
+                    )
+                    self._conn.execute(
+                        "INSERT INTO provider_locators(asset_id,provider_instance_id,provider_folder_id,status)"
+                        " VALUES(?,?,?,'pending')", (asset_id, provider_instance_id, folder_id),
+                    )
+                    self._conn.execute(
+                        "INSERT INTO asset_owners(asset_id,source_instance_id,agent_id,project_id,channel,"
+                        "registered_at,content_sha256) VALUES(?,?,?,?,?,?,?)", (asset_id, *scope, now, digest),
+                    )
+                if request_id is not None:
+                    self._conn.execute(
+                        "INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,operation,"
+                        "request_id,fingerprint,asset_id,deduplicated,initial_status)"
+                        " VALUES(?,?,?,?,'ingest_image',?,?,?,?,?)",
+                        (*scope, request_id, fingerprint, asset_id, int(dedup), status),
+                    )
+                self._conn.commit()
+                return {"asset_id": asset_id, "deduplicated": dedup, "status": status}
+            except StorageError:
+                self._conn.rollback()
+                raise
+            except sqlite3.Error:
+                self._conn.rollback()
+                raise StorageError("image transaction failed") from None
+
     def find_managed_asset_by_hash(self, content_sha256: str) -> dict | None:
         """Managed asset whose stored digest matches (content-addressed dedup,
         B-10). Exact 64-hex only — a malformed digest never matches."""
@@ -551,7 +668,8 @@ class Repository:
                 return None
             cur = self._conn.execute(
                 "SELECT asset_id, relative_managed_path, media_type, size_bytes"
-                " FROM assets WHERE origin='managed' AND content_sha256 = ?",
+                " FROM assets a WHERE origin='managed' AND content_sha256 = ?"
+                " AND NOT EXISTS (SELECT 1 FROM asset_owners o WHERE o.asset_id=a.asset_id)",
                 (content_sha256,),
             )
             row = cur.fetchone()

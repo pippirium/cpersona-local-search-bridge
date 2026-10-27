@@ -33,7 +33,9 @@ normalization is exactly D-16. IDs are lowercase UUIDv4 strings except for
 opaque staging/candidate/cursor tokens. JSON fields are case sensitive. The
 success envelope is `{"ok":true,...}`; errors are
 `{"ok":false,"error":{"code":...}}` with no paths, payloads or foreign
-scope information. Unknown and inaccessible IDs have the same
+scope information. Typed MCP results may include unused success fields as `null`
+on errors and `error: null` on success; no actual partial result is returned.
+Unknown and inaccessible IDs have the same
 `asset_not_found` result. Unsupported image type uses `unsupported_media`,
 oversize uses `media_too_large`, malformed arguments use `invalid_request`,
 dependency and index faults use the existing codes in docs/04. Storage full
@@ -125,7 +127,9 @@ pixels, and may only be lowered. Standard padded RFC 4648 Base64 with no
 whitespace is required. Before decoding, reject more than
 `4 * ceil(max_fetch_bytes / 3)` ASCII characters, then strictly decode and
 check actual nonzero byte length. Sniff magic and fully validate a single image
-with bounded decoding and decompression-bomb checks. Accept JPEG, PNG, WebP
+with bounded decoding and decompression-bomb checks. Animation is limited to
+256 frames and the total decoded canvas pixels across frames to the configured
+pixel cap. Accept JPEG, PNG, WebP
 and GIF; HEIC/HEIF are explicitly `unsupported_media`. Ignore declared MIME
 as an authority. Preserve exact bytes, including EXIF and GIF animation; do not
 rotate, strip, log or interpret metadata. SHA-256 is computed on exact bytes.

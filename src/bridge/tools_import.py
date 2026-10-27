@@ -160,6 +160,18 @@ def register_asset(
 
     pid = config.provider_instance_id
 
+    # The older indexed-source import must not bypass owner isolation for
+    # freshly ingested images or turn them into unowned legacy aliases.
+    existing_ids = repo.locators_by_file(pid, provider_file_id)
+    owned_ids = [aid for aid in existing_ids if repo.asset_has_owner(asset_id=aid)]
+    if owned_ids:
+        scope = (source_instance_id, agent_id, project_id, channel)
+        try:
+            own = any(repo.owned_asset(scope=scope, asset_id=aid) for aid in owned_ids)
+        except StorageError:
+            return fail("invalid_request")
+        return fail("invalid_request" if own else "asset_not_found")
+
     with _IMPORT_LOCK:
         try:
             # ---- gate 2: source revalidation on live evidence ----------------
@@ -170,6 +182,14 @@ def register_asset(
                 detail = provider.file_detail(provider_file_id)
             except BridgeError as exc:
                 return fail(exc.code)
+            folder, directory, name = detail.get("folder_id"), detail.get("rel_dir"), detail.get("name")
+            if isinstance(folder, int) and isinstance(directory, str) and isinstance(name, str):
+                owned = repo.owned_assets_for_managed_identity(
+                    provider_instance_id=pid, folder_id=folder, relative_path=directory + "/" + name)
+                if owned:
+                    scope = (source_instance_id, agent_id, project_id, channel)
+                    own = any(repo.owned_asset(scope=scope, asset_id=aid) for aid in owned)
+                    return fail("invalid_request" if own else "asset_not_found")
             if detail.get("kind") != "image" or not detail.get("available", True):
                 return fail("unsupported_media" if detail.get("kind") != "image"
                             else "asset_unavailable")
