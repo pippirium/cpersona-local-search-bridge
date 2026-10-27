@@ -230,6 +230,12 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     associated = _payload(await assets.call_tool("link_registered_asset", {
                                         **scope, "memory_ref": ref, "asset_id": new["asset_id"]}))
                                     assert associated["ok"] and associated["link_status"] == "pending"
+                                    # A *later* real CPersona recall stays text-only; the host
+                                    # resolves image references through Bridge in a separate step.
+                                    for name in ("recall", "reconstruct"):
+                                        later = await memory.call_tool(name, {**scope, "query": "integration"})
+                                        assert all(block.type == "text" for block in later.content)
+                                        assert "integration" in json.dumps(_payload(later), ensure_ascii=False)
                                     invalid_ref = _payload(await assets.call_tool("link_registered_asset", {
                                         **scope, "memory_ref": "mem:0", "asset_id": new["asset_id"]}))
                                     assert invalid_ref["error"]["code"] == "invalid_request"
