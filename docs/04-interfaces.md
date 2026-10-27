@@ -80,7 +80,7 @@ B-01 guard note (docs/10-contract-audit.md): the provider's Host/Origin guard ac
 
 ## Proposed image-input contract (IMG-01)
 
-The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). Except for `ingest_image`, these are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing tools retain their linked-only access; the legacy link path refuses to claim another scope’s explicitly owned asset, and managed fetch checks its stored hash.
+The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). Except for `ingest_image`, these are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing tools retain their linked-only access. Legacy link and indexed-source import refuse to claim an owned image from another scope, including while it is pending; indexed-source import also refuses owned copies in their owner scope. Managed fetch checks its stored hash.
 
 ## Extension points and policy
 - A future CPersona-native integration may consume stable asset refs; it must preserve existing text-only recall default and be done in the user's fork under a separate approved PR.

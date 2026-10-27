@@ -193,3 +193,39 @@ def test_pending_resolution_rejects_repointed_provider_folder(tmp_path):
     assert not report.bound and report.waiting[0]["reason"] == "identity_mismatch"
     assert repo.locator_status(result.asset_id, config.provider_instance_id) == "pending"
     repo.close()
+
+
+def test_legacy_import_cannot_bypass_ingested_owner(tmp_path):
+    from bridge.provider import FakeFile
+    from bridge.tools_import import register_asset
+    config, provider, repo = setup(tmp_path)
+    asset = call(config, provider, repo).asset_id
+    repo.bind_pending_locator(asset_id=asset, provider_instance_id=config.provider_instance_id,
+        provider_file_id=7, last_seen_kind="image", last_seen_name="synthetic.png",
+        last_seen_mtime="2026-01-01T00:00:00Z", last_seen_size=42)
+    provider.files[7] = FakeFile(file_id=7)
+    def register(agent):
+        return register_asset(provider=provider, repo=repo, config=config, source_instance_id="",
+            agent_id=agent, project_id="", channel="", memory_ref="mem:1", provider_file_id=7)
+    assert register("b").error["code"] == "asset_not_found"
+    assert register("a").error["code"] == "invalid_request"
+    assert not any(call[0] == "file_content" for call in provider.calls)
+    repo.close()
+
+
+def test_legacy_tools_cannot_claim_an_indexed_but_unresolved_owned_copy(tmp_path):
+    from bridge.provider import FakeFile
+    from bridge.tools_import import register_asset
+    from bridge.tools_link import link_asset
+    config, provider, repo = setup(tmp_path)
+    result = call(config, provider, repo)
+    asset = repo.asset(result.asset_id, config.provider_instance_id)
+    shard, name = asset["relative_managed_path"].split("/")
+    provider.files[9] = FakeFile(file_id=9, folder_id=1, name=name, rel_dir=shard,
+                                size=asset["size_bytes"], status="indexed")
+    common = dict(provider=provider, repo=repo, source_instance_id="", agent_id="b", project_id="",
+                  channel="", memory_ref="mem:1", provider_file_id=9)
+    assert link_asset(provider_instance_id=config.provider_instance_id, **common).error["code"] == "asset_not_found"
+    assert register_asset(config=config, **common).error["code"] == "asset_not_found"
+    assert not any(call[0] == "file_content" for call in provider.calls)
+    repo.close()

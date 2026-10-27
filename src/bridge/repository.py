@@ -555,6 +555,18 @@ class Repository:
             except sqlite3.IntegrityError:
                 raise StorageError("file already bound to another asset") from None
 
+    def owned_assets_for_managed_identity(self, *, provider_instance_id: str,
+                                          folder_id: int, relative_path: str) -> list[str]:
+        """Find owned managed copies even before their pending locators bind."""
+        with self.lock:
+            rows = self._conn.execute(
+                "SELECT a.asset_id FROM assets a JOIN asset_owners o ON o.asset_id=a.asset_id"
+                " JOIN provider_locators l ON l.asset_id=a.asset_id"
+                " WHERE l.provider_instance_id=? AND l.provider_folder_id=?"
+                " AND a.relative_managed_path=?", (provider_instance_id, folder_id, relative_path),
+            ).fetchall()
+            return [row[0] for row in rows]
+
     def owned_asset(self, *, scope: tuple[str, str, str, str], asset_id: str) -> bool:
         """Owner membership is distinct from link-based access."""
         with self.lock:
