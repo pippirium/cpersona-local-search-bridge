@@ -18,6 +18,8 @@
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -43,6 +45,12 @@ class RequestConflict(StorageError):
 
 class SchemaTooNew(StorageError):
     """Stored user_version exceeds what this code knows: refuse to open."""
+
+
+def image_request_fingerprint(digest: str, provider_instance_id: str, folder_id: int) -> str:
+    """Pin all effectful ingest inputs, including configured provider and folder."""
+    value = json.dumps([digest, provider_instance_id, folder_id], separators=(",", ":"))
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def utc_now() -> str:
@@ -564,7 +572,7 @@ class Repository:
             ).fetchone() is not None
 
     def check_image_request(self, *, scope: tuple[str, str, str, str], request_id: str,
-                            digest: str) -> None:
+                            digest: str, provider_instance_id: str, folder_id: int) -> None:
         """Reject a known conflicting retry before publishing a managed copy."""
         with self.lock:
             scope = normalize_scope(*scope)
@@ -573,7 +581,7 @@ class Repository:
                 " AND project_id=? AND channel=? AND operation='ingest_image' AND request_id=?",
                 (*scope, request_id),
             ).fetchone()
-            if prior and prior[0] != digest:
+            if prior and prior[0] != image_request_fingerprint(digest, provider_instance_id, folder_id):
                 raise RequestConflict("request id conflict")
 
     def create_owned_image(self, *, scope: tuple[str, str, str, str],
@@ -585,6 +593,7 @@ class Repository:
             scope = normalize_scope(*scope)
             if not ASSET_ID_RE.fullmatch(asset_id) or not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise StorageError("invalid identity")
+            fingerprint = image_request_fingerprint(digest, provider_instance_id, folder_id)
             try:
                 self._conn.execute("BEGIN IMMEDIATE")
                 if request_id is not None:
@@ -594,7 +603,7 @@ class Repository:
                         " AND operation='ingest_image' AND request_id=?", (*scope, request_id),
                     ).fetchone()
                     if prior:
-                        if prior[0] != digest:
+                        if prior[0] != fingerprint:
                             raise RequestConflict("request id conflict")
                         self._conn.commit()
                         return {"asset_id": prior[1], "deduplicated": bool(prior[2]), "status": prior[3]}
@@ -602,7 +611,7 @@ class Repository:
                     "SELECT a.asset_id, l.status FROM asset_owners o JOIN assets a ON a.asset_id=o.asset_id"
                     " JOIN provider_locators l ON l.asset_id=a.asset_id AND l.provider_instance_id=?"
                     " WHERE o.source_instance_id=? AND o.agent_id=? AND o.project_id=? AND o.channel=?"
-                    " AND o.content_sha256=?", (provider_instance_id, *scope, digest),
+                    " AND o.content_sha256=? AND l.provider_folder_id=?", (provider_instance_id, *scope, digest, folder_id),
                 ).fetchone()
                 dedup = prior_asset is not None
                 status = prior_asset[1] if prior_asset else "pending"
@@ -628,7 +637,7 @@ class Repository:
                         "INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,operation,"
                         "request_id,fingerprint,asset_id,deduplicated,initial_status)"
                         " VALUES(?,?,?,?,'ingest_image',?,?,?,?,?)",
-                        (*scope, request_id, digest, asset_id, int(dedup), status),
+                        (*scope, request_id, fingerprint, asset_id, int(dedup), status),
                     )
                 self._conn.commit()
                 return {"asset_id": asset_id, "deduplicated": dedup, "status": status}

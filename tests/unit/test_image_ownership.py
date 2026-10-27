@@ -94,3 +94,26 @@ def test_restore_v1_backup_and_old_binary_rejects_v2(tmp_path):
     conn = open_repository(restored_dir, migrations_dir=v1_dir)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
     conn.close()
+
+
+def test_retry_key_is_bound_to_provider_and_folder(tmp_path):
+    repo = Repository(open_repository(tmp_path))
+    create(repo, request_id="one")
+    with pytest.raises(StorageError):
+        repo.create_owned_image(scope=SCOPE_A, asset_id=str(uuid.uuid4()), digest=DIGEST,
+            relative_path=f"aa/{DIGEST}.png", media_type="image/png", size_bytes=42,
+            provider_instance_id="other-provider", folder_id=1, request_id="one")
+    with pytest.raises(StorageError):
+        repo.check_image_request(scope=SCOPE_A, request_id="one", digest=DIGEST,
+            provider_instance_id="test-provider", folder_id=2)
+    repo.close()
+
+
+def test_deduplication_is_bound_to_configured_provider_folder(tmp_path):
+    repo = Repository(open_repository(tmp_path))
+    first = create(repo)
+    other = repo.create_owned_image(scope=SCOPE_A, asset_id=str(uuid.uuid4()), digest=DIGEST,
+        relative_path=f"aa/{DIGEST}.png", media_type="image/png", size_bytes=42,
+        provider_instance_id="test-provider", folder_id=2, request_id=None)
+    assert other["asset_id"] != first["asset_id"] and not other["deduplicated"]
+    repo.close()

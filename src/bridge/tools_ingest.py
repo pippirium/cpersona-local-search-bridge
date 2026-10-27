@@ -48,7 +48,9 @@ def ingest_image(*, provider: ProviderPort, repo: Repository, config: BridgeConf
                                     max_pixels=config.max_pixels)
         if client_request_id is not None:
             try:
-                repo.check_image_request(scope=scope, request_id=client_request_id, digest=image.sha256)
+                repo.check_image_request(scope=scope, request_id=client_request_id, digest=image.sha256,
+                                         provider_instance_id=config.provider_instance_id,
+                                         folder_id=config.managed_folder_id)
             except RequestConflict:
                 raise BridgeError("invalid_request") from None
             except StorageError:
