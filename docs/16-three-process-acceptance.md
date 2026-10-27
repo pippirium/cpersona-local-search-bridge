@@ -37,3 +37,12 @@ The fork was fetched via GitHub's archive endpoint for the full SHA above and in
 ## Limits
 
 This is one small deterministic integration case, not a release certification or semantic-quality benchmark. It does not measure real EmbeddingGemma quality, compare embedding models, prove every OS failure mode, or rehearse installation on a fresh Mac. The historical docs/15 audit remains a separate earlier fake-embedder run; this document supplies the previously missing real CPersona three-process evidence. CP-02 remains tracked by #19.
+
+
+## New IMG-09 acceptance extension (not yet executed)
+
+[docs/20](20-img09-three-process-acceptance.md) extends this historical
+B-13 result to two input paths, exact scoped metadata, isolation and search.
+The 2026-10-26 pass reported above **does not** prove those new assertions:
+run the opt-in three-process test again only with isolated executables and
+a Bridge that includes #62 metadata support, and record its outcome separately.
