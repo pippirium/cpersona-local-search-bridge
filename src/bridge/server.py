@@ -14,7 +14,7 @@ from mcp.server.mcpserver import MCPServer
 from bridge.config import BridgeConfig, load_config
 from bridge.errors import BridgeError, error_result
 from bridge.provider import FakeProvider, ProviderPort
-from bridge.repository import Repository
+from bridge.repository import Repository, latest_known_version
 from bridge.tools_link import LinkResult, UnlinkResult
 from bridge.tools_get import GetAssetResult, get_asset as _get_impl
 from bridge.tools_import import RegisterAssetResult, register_asset as _register_impl
@@ -78,7 +78,7 @@ def _storage_health(ctx: BridgeContext) -> StorageHealth:
     """When a repository is attached, report its ACTUAL schema version from
     PRAGMA user_version; without one (pure test hosts) report the known value."""
     if ctx.db is None:
-        return StorageHealth(writable=True, schema_version=1)
+        return StorageHealth(writable=True, schema_version=latest_known_version())
     return StorageHealth(writable=True, schema_version=ctx.db.schema_version())
 
 
@@ -133,7 +133,7 @@ def bridge_health(ctx: BridgeContext) -> HealthResult:
         managed_enabled=managed_enabled,
         managed_folder_registered=managed_registered,
         managed_watch=managed_watch,
-        schema_version=1,
+        schema_version=_storage_health(ctx).schema_version,
         provider_instance_id=ctx.config.provider_instance_id,
         provider=provider,
         storage=_storage_health(ctx),
@@ -412,7 +412,7 @@ def main() -> None:  # pragma: no cover - process entrypoint
         sys.stderr.write("bridge: configuration error: " + str(exc) + "\n")
         raise SystemExit(2)
     from bridge.client import LocalSearchClient
-    from bridge.repository import Repository, open_repository
+    from bridge.repository import Repository, latest_known_version, open_repository
 
     conn = open_repository(config.data_dir)
     provider = LocalSearchClient(config)

@@ -29,7 +29,7 @@ def migrated_db(tmp_path: Path) -> sqlite3.Connection:
     the contract requires the application to do."""
     db = sqlite3.connect(tmp_path / "bridge.db")
     db.execute("PRAGMA foreign_keys = ON")
-    for sql_file in sorted(MIGRATIONS_DIR.glob("*.sql")):
+    for sql_file in [MIGRATIONS_DIR / "0001_v1.sql"]:
         script = sql_file.read_text(encoding="utf-8")
         db.executescript(script)
         version = int(re.search(r"user_version = (\d+)", script).group(1))

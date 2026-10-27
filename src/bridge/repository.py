@@ -543,6 +543,79 @@ class Repository:
             except sqlite3.IntegrityError:
                 raise StorageError("file already bound to another asset") from None
 
+    def owned_asset(self, *, scope: tuple[str, str, str, str], asset_id: str) -> bool:
+        """Owner membership is distinct from link-based access."""
+        with self.lock:
+            normalized = normalize_scope(*scope)
+            return self._conn.execute(
+                "SELECT 1 FROM asset_owners WHERE source_instance_id=? AND agent_id=?"
+                " AND project_id=? AND channel=? AND asset_id=?",
+                (*normalized, asset_id),
+            ).fetchone() is not None
+
+    def create_owned_image(self, *, scope: tuple[str, str, str, str],
+                           asset_id: str, digest: str, relative_path: str,
+                           media_type: str, size_bytes: int, provider_instance_id: str,
+                           folder_id: int, request_id: str | None) -> dict:
+        """Atomically create an owned pending asset, or reuse only this scope's copy."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            if not ASSET_ID_RE.fullmatch(asset_id) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise StorageError("invalid identity")
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                if request_id is not None:
+                    prior = self._conn.execute(
+                        "SELECT fingerprint, asset_id, deduplicated, initial_status FROM image_requests"
+                        " WHERE source_instance_id=? AND agent_id=? AND project_id=? AND channel=?"
+                        " AND operation='ingest_image' AND request_id=?", (*scope, request_id),
+                    ).fetchone()
+                    if prior:
+                        if prior[0] != digest:
+                            raise StorageError("request id conflict")
+                        self._conn.commit()
+                        return {"asset_id": prior[1], "deduplicated": bool(prior[2]), "status": prior[3]}
+                prior_asset = self._conn.execute(
+                    "SELECT a.asset_id, l.status FROM asset_owners o JOIN assets a ON a.asset_id=o.asset_id"
+                    " JOIN provider_locators l ON l.asset_id=a.asset_id AND l.provider_instance_id=?"
+                    " WHERE o.source_instance_id=? AND o.agent_id=? AND o.project_id=? AND o.channel=?"
+                    " AND o.content_sha256=?", (provider_instance_id, *scope, digest),
+                ).fetchone()
+                dedup = prior_asset is not None
+                status = prior_asset[1] if prior_asset else "pending"
+                if dedup:
+                    asset_id = prior_asset[0]
+                else:
+                    now = utc_now()
+                    self._conn.execute(
+                        "INSERT INTO assets(asset_id,origin,media_kind,content_sha256,relative_managed_path,"
+                        "media_type,size_bytes,created_at,updated_at) VALUES(?, 'managed', 'image',?,?,?,?,?,?)",
+                        (asset_id, digest, relative_path, media_type, size_bytes, now, now),
+                    )
+                    self._conn.execute(
+                        "INSERT INTO provider_locators(asset_id,provider_instance_id,provider_folder_id,status)"
+                        " VALUES(?,?,?,'pending')", (asset_id, provider_instance_id, folder_id),
+                    )
+                    self._conn.execute(
+                        "INSERT INTO asset_owners(asset_id,source_instance_id,agent_id,project_id,channel,"
+                        "registered_at,content_sha256) VALUES(?,?,?,?,?,?,?)", (asset_id, *scope, now, digest),
+                    )
+                if request_id is not None:
+                    self._conn.execute(
+                        "INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,operation,"
+                        "request_id,fingerprint,asset_id,deduplicated,initial_status)"
+                        " VALUES(?,?,?,?,'ingest_image',?,?,?,?,?)",
+                        (*scope, request_id, digest, asset_id, int(dedup), status),
+                    )
+                self._conn.commit()
+                return {"asset_id": asset_id, "deduplicated": dedup, "status": status}
+            except StorageError:
+                self._conn.rollback()
+                raise
+            except sqlite3.Error:
+                self._conn.rollback()
+                raise StorageError("image transaction failed") from None
+
     def find_managed_asset_by_hash(self, content_sha256: str) -> dict | None:
         """Managed asset whose stored digest matches (content-addressed dedup,
         B-10). Exact 64-hex only — a malformed digest never matches."""

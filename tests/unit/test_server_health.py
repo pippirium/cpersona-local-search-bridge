@@ -57,7 +57,7 @@ def test_health_ok(ctx):
     assert (p.reachable, p.provider_version, p.generation, p.model_state,
             p.index_mismatch, p.checked) == (True, "0.1.1-fake", 1, "ready", None, True)
     assert h.warnings == []
-    assert h.schema_version == 1
+    assert h.schema_version == 2
 
 
 def test_health_provider_down(ctx):
@@ -187,4 +187,4 @@ async def test_health_reports_attached_repository_schema_version(tmp_path):
     async with connected_client(server) as session:
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
-        assert payload["storage"]["schema_version"] == 1
+        assert payload["storage"]["schema_version"] == 2
