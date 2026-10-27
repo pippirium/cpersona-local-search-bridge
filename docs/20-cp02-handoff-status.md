@@ -36,3 +36,5 @@ This is one group only, not the BGE aggregate. The full BGE result was not produ
 The fork branch contains the harness and checkpoint documentation. Full-LMEB input text, model weights, checkpoint blobs and per-query outputs are local ignored artifacts and are not on the branch. The other PC can resume at BGE group 9 only if it has matching ignored inputs/checkpoints and verifies the dataset, task-instruction, model, harness and execution fingerprints; otherwise it must prepare isolated inputs and rerun. The current Jina full-result artifact is also local only. Never commit corpus/query text, private paths, credentials or checkpoint data.
 
 Do not resume inference until requested. The next evaluation steps are to finish BGE-M3, run Gemma at the preregistered conditions, and then run the paired comparison over all three complete result files. CP-02 remains incomplete; this handoff does not open a PR or authorize a merge.
+
+The Gemma-specific pre-run gates and command are in the [EmbeddingGemma 2 experiment plan](21-cp02-gemma2-experiment-plan.md). The plan does not start inference.

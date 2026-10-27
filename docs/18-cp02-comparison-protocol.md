@@ -2,6 +2,8 @@
 
 Status: Phase 1 (Japanese smoke and SciFact) was measured independently. The full-LMEB Phase 2 conditions below were fixed before its model inference. Jina is complete; BGE-M3 is paused after LongMemEval group 8; Gemma is unrun. See the [2026-10-28 handoff](20-cp02-handoff-status.md) and detailed [CPersona checkpoint report](https://github.com/pippirium/CPersona/tree/feat/cp02-fair-embedding-comparison/docs/research/cp02-full-lmeb-checkpoint-2026-10-28.ja.md). The user permits PR creation in the experimental CPersona fork, but this handoff is branch-push only and creates no PR. This remains a standalone evaluation and does not change the Bridge runtime or provider contracts.
 
+The Gemma-specific run gate and execution steps are in the [EmbeddingGemma 2 experiment plan](21-cp02-gemma2-experiment-plan.md).
+
 ## Fixed inputs
 
 | Component | Revision / condition |
