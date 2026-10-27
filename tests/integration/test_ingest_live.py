@@ -23,6 +23,8 @@ LS_COMMAND = os.environ.get("BRIDGE_THREE_PROCESS_LOCAL_SEARCH")
 def test_ingest_then_live_watcher_resolves(tmp_path):
     managed = tmp_path / "managed"
     managed.mkdir(mode=0o700)
+    selected = tmp_path / "selected"
+    selected.mkdir(mode=0o700)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -50,7 +52,8 @@ def test_ingest_then_live_watcher_resolves(tmp_path):
                 assert response.status_code == 201
                 folder_id = response.json()["id"]
                 cfg = validate_config(data_dir=tmp_path / "bridge", provider_base_url=base,
-                    managed_root=managed, managed_folder_id=folder_id)
+                    managed_root=managed, managed_folder_id=folder_id,
+                    staging_root=tmp_path / "staging", staging_input_root=selected)
                 repo = Repository(open_repository(tmp_path / "bridge"))
                 provider = LocalSearchClient(cfg)
                 try:
@@ -68,6 +71,26 @@ def test_ingest_then_live_watcher_resolves(tmp_path):
                     else:
                         pytest.fail("isolated managed image did not resolve")
                     assert repo.locator_status(result.asset_id, cfg.provider_instance_id) == "ready"
+                    from bridge.staging import stage_image
+                    from bridge.tools_staging import import_staged_image
+                    source = selected / "synthetic.png"
+                    second = io.BytesIO()
+                    Image.new("RGB", (8, 8), "blue").save(second, "PNG")
+                    source.write_bytes(second.getvalue())
+                    token = stage_image(config=cfg, repo=repo, scope=("", "synthetic", "", ""),
+                                        relative_path="synthetic.png", confirmed=True)
+                    staged = import_staged_image(provider=provider, repo=repo, config=cfg,
+                                                  agent_id="synthetic", staging_id=token)
+                    assert staged.ok and staged.ingest_status == "pending"
+                    deadline = time.monotonic() + 30
+                    while time.monotonic() < deadline:
+                        report = resolve_pending(provider=provider, repo=repo, config=cfg)
+                        if any(item["asset_id"] == staged.asset_id for item in report.bound):
+                            break
+                        time.sleep(.1)
+                    else:
+                        pytest.fail("isolated staged image did not resolve")
+                    assert source.read_bytes() == second.getvalue()
                 finally:
                     provider.close()
                     repo.close()

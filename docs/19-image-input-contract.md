@@ -171,18 +171,22 @@ older binary cannot interpret v2 and must fail closed; restore a matching
 pre-upgrade backup instead of dropping owner data. Test upgrades from v1 with
 links and pending locators, foreign keys, concurrent retries, and restore.
 
-A staged entry has an unpredictable token, exact owner scope, content hash,
+A staged entry has a 256-bit random opaque token, exact owner scope, content hash,
 size and filesystem identity captured after an atomic completed write, an
-expiry (15 minutes from creation), and an atomic consume/result record. The helper may read only an
+expiry (15 minutes from creation), and an atomic consume/result record. The local helper accepts a relative selection only under the configured input
+root; it requires explicit `--confirm`. The helper may read only an
 operator-configured input root, rejects symlinks, hardlinks, traversal and
 replacement using descriptor-based no-follow checks, and copies rather than
 moves the original. Staging and managed roots are private and separate. Import
-checks expiry, scope, file identity and hash again, reuses the same byte gates,
+checks expiry, scope, staging file device/inode/mtime, hardlink count and hash again,
+reuses the same byte gates,
 and commits consume together with its durable result. Retrying a successful
 consume returns the same result only to the same scope; parallel consumers
 cannot create inconsistent outcomes. Failure before commit leaves the entry
-retryable until expiry. Expired temporary entries can be removed only by an
-explicit staging GC limited to the configured staging root. No original file
+retryable until expiry. Expired temporary entries remain on disk until the operator explicitly runs
+the bounded staging GC. It removes only ledger-tracked expired files whose
+identity still matches, reports replaced files as blocked, and leaves foreign
+files untouched. A successful token replay is allowed until expiry. No original file
 is deleted. Cancellation before commit creates no association.
 
 ## Metadata patch contract

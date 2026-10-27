@@ -89,3 +89,16 @@ MCP SDK typed result serialization includes unused optional fields as JSON null.
 ## D-32 — Scoped, read-only status observation (IMG-04, #58)
 
 Status reads perform bounded provider and managed-copy checks without writing the locator or invoking the global resolver. A freshly observed identity failure, deletion or index conflict is reported as stale, missing or incompatible even if the stored state has not changed. Provider outages preserve the stored status but set indexed false and supply a retryable reason. checked_at remains the last stored verification time, not the time of this read. Resolution of new owned assets captures the provider index generation after confirming it remains unchanged across the identity checks; missing or changing generation leaves the asset pending.
+
+## D-33 — Explicit local staging handoff (IMG-03, #57)
+
+The operator configures separate private staging and permitted source roots,
+selects a relative file with explicit confirmation, and hands the host a
+short-lived random token. The MCP tool accepts only that token. Staged bytes,
+source evidence and owner scope are rechecked; a transaction commits owner,
+retry and consume records together. Expiry does not delete files automatically;
+operator-triggered bounded GC removes only matching expired ledger entries.
+Source reads use no-follow descriptors, an advisory shared lock and unchanged
+file identity checks. A non-cooperating process can still modify an original
+after selection; the copied image is a validated snapshot, not a claim of
+exclusive control over the source.
