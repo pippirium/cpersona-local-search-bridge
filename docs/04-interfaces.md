@@ -1,6 +1,6 @@
 # 04 — Implemented MCP interface contracts (development 0.0.0)
 
-Runtime source: [server.py](../src/bridge/server.py); typed results are in tools_link/tools_search/tools_get/tools_import, reconcile and audit. The thirteen tools below are registered on local stdio. These are implemented interfaces, not a release certification; the isolated three-process smoke is recorded separately in docs/16. [README](../README.md) records current evidence and unverified gates.
+Runtime source: [server.py](../src/bridge/server.py); typed results are in tools_link/tools_search/tools_get/tools_import, reconcile and audit. The fourteen tools below are registered on local stdio. These are implemented interfaces, not a release certification; the isolated three-process smoke is recorded separately in docs/16. [README](../README.md) records current evidence and unverified gates.
 
 ## General rules
 
@@ -21,6 +21,7 @@ Tools do not accept arbitrary source paths or URLs. Normal listing/search return
 | get_ingest_status | `asset_id` | scoped, read-only state, indexed/retryable flags and sanitized reason code |
 | import_staged_image | `staging_id`, optional `client_request_id` | import an operator-staged image into a scoped pending asset |
 | discover_assets | `query`, optional `folder_id`, `limit`, `cursor` | allowlisted scoped candidates and opaque selection tokens, no image bytes |
+| search_assets_by_image | exactly one of `query_asset_id` or `image_base64`; optional `folder_id`, `limit` | linked, exact-scope image results with coverage, no image bytes |
 | link_asset | `memory_ref`, positive integer `provider_file_id` | `ok`, stable `asset_id`, `link_status`, `media_kind`, optional error |
 | unlink_asset | `memory_ref`, `asset_id` | `ok`, `unlinked`, `remaining_links` in exact scope; never deletes files |
 | search_assets | `query`, `limit=10` (clamped 1..20), optional `folder_id` | `ok`, `query`, `results`, `search_coverage=exact/partial`, `provider_warning`, error |
@@ -83,7 +84,7 @@ B-01 guard note (docs/10-contract-audit.md): the provider's Host/Origin guard ac
 
 ## Proposed image-input contract (IMG-01)
 
-The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). Except for `ingest_image`, `import_staged_image`, `get_ingest_status` and `discover_assets`, these are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing tools retain their linked-only access. Legacy link and indexed-source import refuse to claim an owned image from another scope, including while it is pending; indexed-source import also refuses owned copies in their owner scope. Managed fetch checks its stored hash.
+The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). Except for `ingest_image`, `import_staged_image`, `get_ingest_status`, `discover_assets` and `search_assets_by_image`, these are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing tools retain their linked-only access. Legacy link and indexed-source import refuse to claim an owned image from another scope, including while it is pending; indexed-source import also refuses owned copies in their owner scope. Managed fetch checks its stored hash.
 
 ## Extension points and policy
 - A future CPersona-native integration may consume stable asset refs; it must preserve existing text-only recall default and be done in the user's fork under a separate approved PR.

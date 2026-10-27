@@ -449,3 +449,13 @@ def test_search_page_uses_search_id_and_folder_filter(tmp_data):
     assert seen == {"search_id": "synthetic-search", "cursor": "next-page", "folder_id": 7,
                     "tab": "image", "page_size": 20}
     assert "q" not in seen
+
+
+def test_search_page_without_folder_preserves_unfiltered_snapshot(tmp_data):
+    seen = {}
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json=load("search-image-200.json"))
+    client = make_client(handler, tmp_path=tmp_data)
+    client.search_page("synthetic-search", "next-page", folder_id=None, page_size=20)
+    assert "folder_id" not in seen and "q" not in seen

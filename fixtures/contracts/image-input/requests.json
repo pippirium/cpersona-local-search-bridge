@@ -958,6 +958,9 @@
                 "string",
                 "null"
               ]
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -999,6 +1002,16 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "results": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "search_coverage": {
+              "type": "null"
+            },
+            "provider_warning": {
+              "type": "null"
             }
           },
           "required": [

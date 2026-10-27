@@ -44,8 +44,11 @@ class ProviderPort(Protocol):
         cursor: str | None = None,
     ) -> dict: ...
 
-    def search_page(self, search_id: str, cursor: str, *, folder_id: int,
+    def search_page(self, search_id: str, cursor: str, *, folder_id: int | None,
                     page_size: int) -> dict: ...
+
+    def search_media(self, data: bytes, *, filename: str, folder_id: int | None = None,
+                     page_size: int = 20) -> dict: ...
 
     def folders(self) -> list[dict]: ...
 
@@ -219,7 +222,13 @@ class FakeProvider:
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
 
-    def search_page(self, search_id: str, cursor: str, *, folder_id: int,
+    def search_media(self, data: bytes, *, filename: str, folder_id: int | None = None,
+                     page_size: int = 20) -> dict:
+        self.calls.append(("search_media", (), {"folder_id": folder_id, "page_size": page_size}))
+        self._fail("search_media")
+        return self.search("synthetic", page_size=page_size, folder_id=folder_id)
+
+    def search_page(self, search_id: str, cursor: str, *, folder_id: int | None,
                     page_size: int) -> dict:
         self.calls.append(("search_page", (search_id, cursor), {"folder_id": folder_id, "page_size": page_size}))
         self._fail("search")

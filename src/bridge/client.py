@@ -146,12 +146,14 @@ class LocalSearchClient:
         self._check(response)
         return self._json(response)
 
-    def search_page(self, search_id: str, cursor: str, *, folder_id: int,
+    def search_page(self, search_id: str, cursor: str, *, folder_id: int | None,
                     page_size: int = 20) -> dict:
         # Continue the provider's frozen search snapshot; never resend query text.
         try:
-            response = self._client.post("/api/search", json={"search_id": search_id,
-                "cursor": cursor, "folder_id": folder_id, "tab": "image", "page_size": page_size})
+            body = {"search_id": search_id, "cursor": cursor, "tab": "image", "page_size": page_size}
+            if folder_id is not None:
+                body["folder_id"] = folder_id
+            response = self._client.post("/api/search", json=body)
         except httpx.TimeoutException as exc:
             raise _transport("timeout_read") from exc
         except httpx.HTTPError as exc:

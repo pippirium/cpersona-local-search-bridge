@@ -119,6 +119,9 @@ read. This read is permitted only as part of the explicitly requested image
 search; no image content is returned in the response or silently persisted.
 The provider performs embedding. Empty/mixed inputs are invalid. A provider
 conflict or timeout is a typed failure, never an empty successful result.
+For historical external links with neither a stored digest nor a known index
+generation, the existing get_asset evidence cannot distinguish an in-place
+replacement that preserves size, name and mtime; this M1 limitation remains.
 
 `link_registered_asset` accepts a pending owned asset or a selected candidate;
 its successful link does not guarantee availability. The candidate route must

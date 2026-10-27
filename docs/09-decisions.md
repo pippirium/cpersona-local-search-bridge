@@ -116,3 +116,14 @@ re-reads and compares its hash and live generation. Cursors and
 tokens last at most five minutes and can be evicted on capacity or restart.
 The MCP SDK emits unused fields as null and empty arrays; the response schema
 permits those on failure without permitting a partial candidate result.
+
+## D-35 — Explicit image-query search (IMG-06, #60)
+
+Image search accepts exactly one bounded image input or an owned/linked query
+asset, delegates embedding to local-search, and intersects results with exact
+linked scope before returning any metadata. An explicit image search may read
+a managed query copy and bounded linked candidate bytes to confirm immutable
+content hashes; it neither returns media bytes nor creates a stored query.
+Provider snapshots are limited to five pages and stale or incompatible identity
+fails closed. The SDK emits unused response fields as null or empty arrays; the
+contract allows those without allowing partial results on errors.

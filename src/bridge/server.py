@@ -23,6 +23,7 @@ from bridge.tools_ingest import IngestResult, ingest_image as _ingest_impl
 from bridge.tools_status import IngestStatusResult, get_ingest_status as _status_impl
 from bridge.tools_staging import import_staged_image as _staging_impl
 from bridge.tools_discover import DiscoveryResult, DiscoveryState, discover_assets as _discover_impl
+from bridge.tools_image_search import ImageSearchResult, search_assets_by_image as _image_search_impl
 from bridge.audit import AuditReport, audit as _audit_impl
 from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
@@ -221,6 +222,16 @@ def create_server(ctx: BridgeContext) -> MCPServer:
         return _discover_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config, state=ctx.discovery,
             agent_id=agent_id, query=query, project_id=project_id, channel=channel,
             source_instance_id=source_instance_id, folder_id=folder_id, limit=limit, cursor=cursor)
+
+    @server.tool(name="search_assets_by_image", description="Search linked images using an explicit image or owned/linked query asset.")
+    def _search_assets_by_image(agent_id: str, query_asset_id: str | None = None, image_base64: str | None = None,
+                                project_id: str = "", channel: str = "", source_instance_id: str = "",
+                                folder_id: int | None = None, limit: int = 10) -> ImageSearchResult:
+        if ctx.db is None:
+            return ImageSearchResult(ok=False, error=error_result("storage_error")["error"])
+        return _image_search_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config, agent_id=agent_id,
+            query_asset_id=query_asset_id, image_base64=image_base64, project_id=project_id,
+            channel=channel, source_instance_id=source_instance_id, folder_id=folder_id, limit=limit)
 
     # ---- link tools (B-07) ----------------------------------------------------
 
