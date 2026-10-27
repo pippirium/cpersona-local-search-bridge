@@ -65,6 +65,8 @@ def validate_patch(patch: object) -> dict[str, str | None]:
     """Only omitted keys mean unchanged; explicit null clears a key."""
     if not isinstance(patch, dict) or not patch or any(k not in FIELDS for k in patch):
         raise BridgeError("invalid_request")
+    if "user_caption" in patch and patch["user_caption"] is None and patch.get("caption_origin") is not None:
+        raise BridgeError("invalid_request")
     for key, value in patch.items():
         if value is None:
             continue
