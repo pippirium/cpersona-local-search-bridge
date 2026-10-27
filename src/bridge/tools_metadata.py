@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from bridge.errors import BridgeError, error_result
-from bridge.repository import ASSET_ID_RE, AssetNotFound, Repository, StorageError
+from bridge.repository import ASSET_ID_RE, AssetNotFound, Repository, RequestConflict, StorageError
 from bridge.tools_ingest import validate_scope_and_key
 
 FIELDS = (
@@ -102,6 +102,8 @@ def get_asset_metadata(*, repo: Repository, agent_id: str, asset_id: str,
         return MetadataResult(True, asset_id, repo.read_asset_metadata(scope=scope, asset_id=asset_id))
     except AssetNotFound:
         return _result_error("asset_not_found")
+    except RequestConflict:
+        return _result_error("invalid_request")
     except (StorageError, sqlite3.Error):
         return _result_error("storage_error")
     except BridgeError as exc:
@@ -118,6 +120,8 @@ def set_asset_metadata(*, repo: Repository, agent_id: str, asset_id: str, metada
         return MetadataResult(True, asset_id, metadata)
     except AssetNotFound:
         return _result_error("asset_not_found")
+    except RequestConflict:
+        return _result_error("invalid_request")
     except (StorageError, sqlite3.Error):
         return _result_error("storage_error")
     except BridgeError as exc:
