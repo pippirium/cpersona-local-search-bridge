@@ -125,7 +125,9 @@ pixels, and may only be lowered. Standard padded RFC 4648 Base64 with no
 whitespace is required. Before decoding, reject more than
 `4 * ceil(max_fetch_bytes / 3)` ASCII characters, then strictly decode and
 check actual nonzero byte length. Sniff magic and fully validate a single image
-with bounded decoding and decompression-bomb checks. Accept JPEG, PNG, WebP
+with bounded decoding and decompression-bomb checks. Animation is limited to
+256 frames and the total decoded canvas pixels across frames to the configured
+pixel cap. Accept JPEG, PNG, WebP
 and GIF; HEIC/HEIF are explicitly `unsupported_media`. Ignore declared MIME
 as an authority. Preserve exact bytes, including EXIF and GIF animation; do not
 rotate, strip, log or interpret metadata. SHA-256 is computed on exact bytes.
