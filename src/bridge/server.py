@@ -20,6 +20,7 @@ from bridge.tools_link import LinkResult, UnlinkResult
 from bridge.tools_get import GetAssetResult, get_asset as _get_impl
 from bridge.tools_import import RegisterAssetResult, register_asset as _register_impl
 from bridge.tools_ingest import IngestResult, ingest_image as _ingest_impl
+from bridge.tools_status import IngestStatusResult, get_ingest_status as _status_impl
 from bridge.audit import AuditReport, audit as _audit_impl
 from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
@@ -189,6 +190,15 @@ def create_server(ctx: BridgeContext) -> MCPServer:
                             agent_id=agent_id, image_base64=image_base64, project_id=project_id,
                             channel=channel, source_instance_id=source_instance_id,
                             client_request_id=client_request_id)
+
+    @server.tool(name="get_ingest_status", description="Read the current scope's indexing state without resolving or modifying assets.")
+    def _get_ingest_status(agent_id: str, asset_id: str, project_id: str = "",
+                           channel: str = "", source_instance_id: str = "") -> IngestStatusResult:
+        if ctx.db is None:
+            return IngestStatusResult(ok=False, error=error_result("storage_error")["error"])
+        return _status_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config, asset_id=asset_id,
+                            agent_id=agent_id, project_id=project_id, channel=channel,
+                            source_instance_id=source_instance_id)
 
     # ---- link tools (B-07) ----------------------------------------------------
 

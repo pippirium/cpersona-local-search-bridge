@@ -173,3 +173,25 @@ def verify_digest(root: Path, relative_path: str, digest: str, expected_size: in
         for item in (fd, shard_fd, root_fd):
             if item is not None:
                 os.close(item)
+
+
+def copy_is_missing(root: Path, relative_path: str) -> bool:
+    """Distinguish absence without resolving a stored path outside the root."""
+    parts = relative_path.split("/")
+    if len(parts) != 2 or not all(parts) or any(part in (".", "..") for part in parts):
+        return False
+    root_fd = shard_fd = None
+    try:
+        root_fd = _open_root(root)
+        shard_fd = os.open(parts[0], _DIR_FLAGS, dir_fd=root_fd)
+        os.stat(parts[1], dir_fd=shard_fd, follow_symlinks=False)
+        return False
+    except FileNotFoundError:
+        return True
+    except (OSError, BridgeError):
+        return False
+    finally:
+        if shard_fd is not None:
+            os.close(shard_fd)
+        if root_fd is not None:
+            os.close(root_fd)

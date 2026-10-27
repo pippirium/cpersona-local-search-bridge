@@ -147,7 +147,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"bridge_health", "link_asset", "unlink_asset",
                     "search_assets", "list_memory_assets", "get_asset",
-                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image"}
+                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
@@ -222,4 +222,26 @@ async def test_ingest_image_wire_success_and_scope_bound(tmp_path):
         error = await session.call_tool("ingest_image", {"agent_id": "a", "image_base64": "!bad"})
         validator.validate(error.structured_content)
         assert error.structured_content["error"]["code"] == "invalid_request"
+    repo.close()
+
+
+@pytest.mark.anyio
+async def test_get_ingest_status_wire_contract(tmp_path):
+    import json
+    from jsonschema import Draft202012Validator
+    from pathlib import Path
+    from tests.unit.test_tools_ingest import setup, call
+    cfg, provider, repo = setup(tmp_path)
+    image = call(cfg, provider, repo)
+    server = create_server(BridgeContext(config=cfg, provider=provider, db=repo))
+    spec = json.loads((Path(__file__).resolve().parents[2] /
+                       "fixtures/contracts/image-input/requests.json").read_text())
+    validator = Draft202012Validator(spec["responses"]["get_ingest_status"])
+    async with connected_client(server) as session:
+        good = (await session.call_tool("get_ingest_status", {"agent_id": "a", "asset_id": image.asset_id})).structured_content
+        validator.validate(good)
+        assert good["status"] == "pending" and not good["indexed"]
+        bad = (await session.call_tool("get_ingest_status", {"agent_id": "b", "asset_id": image.asset_id})).structured_content
+        validator.validate(bad)
+        assert bad["error"]["code"] == "asset_not_found" and bad["asset_id"] is None
     repo.close()

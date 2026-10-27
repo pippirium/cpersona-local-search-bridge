@@ -192,3 +192,12 @@ no memory is linked until a separate explicit association. Run
 `resolve_pending_assets` after the provider indexes the managed copy. A
 failed import may leave a content-addressed orphan; audit reports managed
 files and removal requires a separate operator action.
+
+
+`get_ingest_status` checks one owner- or link-visible asset without changing
+its locator. It reports waiting, unavailable provider/folder, index conflict,
+missing file or identity mismatch as codes. It makes at most three logical provider reads (each may retry once on a
+connection failure) and reads at most the configured image byte cap for a managed digest.
+A reported `ready` does not replace the explicit `get_asset` identity checks.
+Run `resolve_pending_assets` separately after indexing; a status read never
+binds pending IDs.
