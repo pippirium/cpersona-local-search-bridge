@@ -63,7 +63,7 @@ def link(r: Repository, asset_id: str, memory_ref: str = "mem:1", **scope) -> No
 
 def test_open_creates_schema_and_version(tmp_path):
     conn = open_repository(tmp_path)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1  # per-connection
     conn.close()
 
