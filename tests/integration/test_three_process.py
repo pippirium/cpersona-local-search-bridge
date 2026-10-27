@@ -69,6 +69,12 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
     managed = tmp_path / "managed"
     watched.mkdir(mode=0o700)
     managed.mkdir(mode=0o700)
+    staged_input = tmp_path / "operator-selected"
+    staged_root = tmp_path / "staging"
+    staged_input.mkdir(mode=0o700)
+    staged_root.mkdir(mode=0o700)
+    staged_media = _png((10, 180, 50))
+    (staged_input / "synthetic-green.png").write_bytes(staged_media)
     media = _png()
     source = watched / "synthetic-red.png"
     source.write_bytes(media)
@@ -128,7 +134,10 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                         "BRIDGE_DATA_DIR": str(tmp_path / "bridge"),
                         "BRIDGE_PROVIDER_URL": base,
                         "BRIDGE_MANAGED_ROOT": str(managed),
-                        "BRIDGE_MANAGED_FOLDER_ID": str(managed_folder)})
+                        "BRIDGE_MANAGED_FOLDER_ID": str(managed_folder),
+                        "BRIDGE_DISCOVERY_FOLDER_IDS": str(source_folder),
+                        "BRIDGE_STAGING_ROOT": str(staged_root),
+                        "BRIDGE_STAGING_INPUT_ROOT": str(staged_input)})
 
                 async def run():
                     async with stdio_client(cp, errlog=logs) as (cr, cw):
@@ -137,6 +146,15 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                             async with stdio_client(bridge, errlog=logs) as (br, bw):
                                 async with ClientSession(br, bw) as assets:
                                     await assets.initialize()
+                                    health = _payload(await assets.call_tool("bridge_health", {}))
+                                    assert health["managed_enabled"]
+                                    assert health["managed_folder_registered"] and health["managed_watch"]
+                                    assert health["storage"]["schema_version"] >= 4
+                                    names = {tool.name for tool in (await assets.list_tools()).tools}
+                                    assert {"ingest_image", "import_staged_image", "get_ingest_status",
+                                            "discover_assets", "search_assets_by_image",
+                                            "link_registered_asset", "get_asset_metadata",
+                                            "set_asset_metadata"} <= names
                                     scope = {"agent_id": "integration", "project_id": "synthetic", "channel": "test"}
                                     saved = _payload(await memory.call_tool("store", {
                                         **scope, "content": "合成テスト 赤い画像 integration probe"}))
@@ -182,14 +200,48 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     assert again["asset_id"] == copied["asset_id"] and again["link_status"] == "ready"
                                     image = await assets.call_tool("get_asset", {**scope, "asset_id": copied["asset_id"]})
                                     assert base64.b64decode(image.content[0].data) == media
-                                    # Explicit new-image link with a ref returned by real CPersona.
+                                    # An unlinked synthetic image must not appear in memory listings.
+                                    # The direct MCP-byte route tests only hosts that can send Base64.
                                     new_media = _png((10, 10, 240))
                                     new = _payload(await assets.call_tool("ingest_image", {
                                         **scope, "image_base64": base64.b64encode(new_media).decode()}))
                                     assert new["ok"] and new["ingest_status"] == "pending"
+                                    status = _payload(await assets.call_tool("get_ingest_status", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert status["ok"] and status["status"] == "pending"
+                                    before_link = _payload(await assets.call_tool("list_memory_assets", {
+                                        **scope, "memory_ref": ref}))
+                                    assert new["asset_id"] not in {entry["asset_id"] for entry in before_link["assets"]}
+                                    wrong_scope = _payload(await assets.call_tool("get_ingest_status", {
+                                        **scope, "agent_id": "other", "asset_id": new["asset_id"]}))
+                                    assert wrong_scope["error"]["code"] == "asset_not_found"
+                                    rejected = _payload(await assets.call_tool("ingest_image", {
+                                        **scope, "image_base64": "%%%"}))
+                                    assert rejected["error"]["code"] == "invalid_request"
+                                    refused = _payload(await assets.call_tool("discover_assets", {
+                                        **scope, "query": "synthetic", "folder_id": managed_folder + source_folder + 1000}))
+                                    assert refused["error"]["code"] == "asset_not_found"
+                                    discovery = _payload(await assets.call_tool("discover_assets", {
+                                        **scope, "query": "赤", "folder_id": source_folder}))
+                                    assert discovery["ok"]
+                                    assert "candidates" in discovery and not any(
+                                        entry.get("asset_id") == new["asset_id"]
+                                        for entry in discovery["candidates"])
                                     associated = _payload(await assets.call_tool("link_registered_asset", {
                                         **scope, "memory_ref": ref, "asset_id": new["asset_id"]}))
                                     assert associated["ok"] and associated["link_status"] == "pending"
+                                    invalid_ref = _payload(await assets.call_tool("link_registered_asset", {
+                                        **scope, "memory_ref": "mem:0", "asset_id": new["asset_id"]}))
+                                    assert invalid_ref["error"]["code"] == "invalid_request"
+                                    metadata = _payload(await assets.call_tool("set_asset_metadata", {
+                                        **scope, "asset_id": new["asset_id"], "metadata_patch": {
+                                            "user_caption": "synthetic blue fixture",
+                                            "caption_origin": "user", "source_kind": "chat_attachment",
+                                            "consent_record": "explicit_user"}}))
+                                    assert metadata["ok"] and metadata["metadata"]["caption_origin"] == "user"
+                                    metadata_other = _payload(await assets.call_tool("get_asset_metadata", {
+                                        **scope, "agent_id": "other", "asset_id": new["asset_id"]}))
+                                    assert metadata_other["error"]["code"] == "asset_not_found"
                                     listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
                                     assert new["asset_id"] in [entry["asset_id"] for entry in listed["assets"]]
                                     deadline = time.monotonic() + 30
@@ -200,6 +252,17 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                         await anyio.sleep(0.1)
                                     else:
                                         pytest.fail("new managed image did not resolve")
+                                    ready = _payload(await assets.call_tool("get_ingest_status", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert ready["ok"] and ready["status"] == "ready" and ready["indexed"]
+                                    # Query searches are metadata-only even though the provider reads bytes internally.
+                                    for query in ({"query_asset_id": new["asset_id"]},
+                                                  {"image_base64": base64.b64encode(new_media).decode()}):
+                                        search_image = await assets.call_tool("search_assets_by_image", {**scope, **query})
+                                        assert all(block.type != "image" for block in search_image.content)
+                                        found = _payload(search_image)
+                                        assert found["ok"]
+                                        assert all("image_base64" not in entry for entry in found["results"])
                                     fetched = await assets.call_tool("get_asset", {**scope, "asset_id": new["asset_id"]})
                                     assert base64.b64decode(fetched.content[0].data) == new_media
                                     removed_new = _payload(await assets.call_tool("unlink_asset", {
@@ -207,6 +270,51 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     assert removed_new["unlinked"]
                                     listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
                                     assert new["asset_id"] not in [entry["asset_id"] for entry in listed["assets"]]
+                                    retained = _payload(await assets.call_tool("get_asset_metadata", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert retained["ok"] and retained["metadata"] == metadata["metadata"]
+                                    # Alternate host path: an operator stages a synthetic file locally,
+                                    # then only the opaque token enters the MCP tool call.
+                                    command = [sys.executable, "-m", "bridge.stage_image",
+                                               "--agent-id", scope["agent_id"],
+                                               "--project-id", scope["project_id"],
+                                               "--channel", scope["channel"],
+                                               "--relative-path", "synthetic-green.png"]
+                                    stage_env = dict(bridge.env)
+                                    refused_stage = subprocess.run(command, cwd=ROOT, env=stage_env,
+                                        capture_output=True, text=True, timeout=15)
+                                    assert refused_stage.returncode != 0
+                                    staged = subprocess.run([*command, "--confirm"], cwd=ROOT, env=stage_env,
+                                        capture_output=True, text=True, timeout=15)
+                                    assert staged.returncode == 0, "isolated staging helper failed"
+                                    token = json.loads(staged.stdout)["staging_id"]
+                                    denied_stage = _payload(await assets.call_tool("import_staged_image", {
+                                        **scope, "agent_id": "other", "staging_id": token}))
+                                    assert denied_stage["error"]["code"] == "invalid_request"
+                                    imported = _payload(await assets.call_tool("import_staged_image", {
+                                        **scope, "staging_id": token}))
+                                    assert imported["ok"] and imported["ingest_status"] == "pending"
+                                    imported_again = _payload(await assets.call_tool("import_staged_image", {
+                                        **scope, "staging_id": token}))
+                                    assert imported_again["asset_id"] == imported["asset_id"]
+                                    staged_link = _payload(await assets.call_tool("link_registered_asset", {
+                                        **scope, "memory_ref": ref, "asset_id": imported["asset_id"]}))
+                                    assert staged_link["ok"]
+                                    deadline = time.monotonic() + 30
+                                    while time.monotonic() < deadline:
+                                        status = _payload(await assets.call_tool("get_ingest_status", {
+                                            **scope, "asset_id": imported["asset_id"]}))
+                                        if status["status"] == "ready":
+                                            break
+                                        _payload(await assets.call_tool("resolve_pending_assets", {}))
+                                        await anyio.sleep(0.1)
+                                    else:
+                                        pytest.fail("staged image did not resolve")
+                                    confirmed = await assets.call_tool("get_asset", {
+                                        **scope, "asset_id": imported["asset_id"]})
+                                    assert [c.type for c in confirmed.content] == ["image"]
+                                    assert base64.b64decode(confirmed.content[0].data) == staged_media
+                                    assert (staged_input / "synthetic-green.png").read_bytes() == staged_media
                                     _stop(process)
                                     outage = _payload(await assets.call_tool("get_asset", {**scope, "asset_id": aid}))
                                     assert outage["error"]["code"] == "dependency_unavailable"
