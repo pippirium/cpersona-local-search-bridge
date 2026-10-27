@@ -196,3 +196,33 @@ def test_candidate_deletion_refuses_selection(tmp_path):
         validate_candidate(provider=provider, repo=repo, config=cfg, state=state,
                            token=token, scope=("", "a", "", ""))
     repo.close()
+
+
+def test_reused_file_id_does_not_reveal_new_label_to_old_scope(tmp_path):
+    from bridge.tools_link import link_asset
+    cfg, provider, repo, state = setup(tmp_path, folder_ids=(1,), count=1)
+    linked = link_asset(provider=provider, repo=repo, provider_instance_id=cfg.provider_instance_id,
+        source_instance_id="", agent_id="a", project_id="", channel="", memory_ref="mem:1", provider_file_id=1000)
+    assert linked.ok
+    provider.files[1000].name = "replacement.png"
+    result = discover(cfg, provider, repo, state, folder_id=1)
+    assert result.ok and result.candidates == []
+    assert not any(call[0] == "file_content" for call in provider.calls)
+    repo.close()
+
+
+def test_owned_file_with_same_size_changed_bytes_is_not_discovered(tmp_path):
+    from tests.unit.test_tools_ingest import setup as managed_setup, call
+    cfg, provider, repo = managed_setup(tmp_path)
+    result = call(cfg, provider, repo)
+    asset = repo.asset(result.asset_id, cfg.provider_instance_id)
+    shard, name = asset["relative_managed_path"].split("/")
+    buf = io.BytesIO()
+    Image.new("RGB", (3, 2), (254, 0, 0)).save(buf, "PNG")
+    replacement = buf.getvalue()
+    assert len(replacement) == asset["size_bytes"]
+    provider.files[9] = FakeFile(file_id=9, folder_id=1, name=name, rel_dir=shard,
+                                 size=len(replacement), content=replacement, width=3, height=2)
+    found = discover(cfg, provider, repo, DiscoveryState(), folder_id=1)
+    assert found.ok and found.candidates == []
+    repo.close()

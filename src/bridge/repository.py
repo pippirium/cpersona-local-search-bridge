@@ -560,28 +560,44 @@ class Repository:
                 raise StorageError("file already bound to another asset") from None
 
     def discovery_visible(self, *, scope: tuple[str, str, str, str], provider_instance_id: str,
-                          file_id: int, folder_id: int, relative_path: str) -> bool:
-        """Unknown files are discoverable; known files need membership in this scope."""
+                          file_id: int, folder_id: int, relative_path: str,
+                          name: str | None = None, size: int | None = None,
+                          mtime: str | None = None, generation: str | None = None,
+                          content_sha256: str | None = None) -> bool:
+        """Known files need matching scope AND live identity, not just a reused row ID."""
         with self.lock:
             scope = normalize_scope(*scope)
             rows = self._conn.execute(
-                "SELECT DISTINCT a.asset_id FROM assets a JOIN provider_locators l ON l.asset_id=a.asset_id"
+                "SELECT a.asset_id,a.origin,a.relative_managed_path,a.content_sha256,"
+                "l.provider_file_id,l.provider_folder_id,l.status,l.last_seen_name,"
+                "l.last_seen_size,l.last_seen_mtime,l.provider_generation"
+                " FROM assets a JOIN provider_locators l ON l.asset_id=a.asset_id"
                 " WHERE l.provider_instance_id=? AND (l.provider_file_id=? OR"
                 " (l.provider_folder_id=? AND a.relative_managed_path=?))",
                 (provider_instance_id, file_id, folder_id, relative_path),
             ).fetchall()
             known = visible = False
-            for (asset_id,) in rows:
+            for (asset_id, origin, stored_path, stored_hash, stored_file, stored_folder, status,
+                 stored_name, stored_size, stored_mtime, stored_generation) in rows:
                 owner = self._conn.execute("SELECT source_instance_id,agent_id,project_id,channel"
                     " FROM asset_owners WHERE asset_id=?", (asset_id,)).fetchone()
-                if owner:
-                    known = True
-                    visible = visible or tuple(owner) == scope
                 links = self._conn.execute("SELECT source_instance_id,agent_id,project_id,channel"
                     " FROM asset_links WHERE asset_id=?", (asset_id,)).fetchall()
-                if links:
-                    known = True
-                    visible = visible or any(tuple(link) == scope for link in links)
+                if not owner and not links:
+                    continue
+                known = True
+                member = (owner is not None and tuple(owner) == scope) or any(tuple(link) == scope for link in links)
+                if not member or status not in ("pending", "ready"):
+                    continue
+                if origin == "managed":
+                    identity_ok = (stored_folder == folder_id and stored_path == relative_path
+                                   and stored_hash is not None
+                                   and (content_sha256 is None or stored_hash == content_sha256))
+                else:
+                    identity_ok = (stored_file == file_id and status == "ready" and stored_name == name
+                                   and stored_size == size and stored_mtime == mtime
+                                   and (stored_generation is None or str(stored_generation) == generation))
+                visible = visible or identity_ok
             return visible or not known
 
     def owned_assets_for_managed_identity(self, *, provider_instance_id: str,

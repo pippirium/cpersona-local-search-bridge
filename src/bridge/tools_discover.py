@@ -124,7 +124,7 @@ def _item(item: dict, folder_id: int) -> dict:
             or not isinstance(directory, str) or directory.startswith("/") or "\\" in directory
             or len(directory.encode("utf-8", errors="surrogatepass")) > 4096
             or any(ord(c) < 32 or ord(c) == 127 for c in directory)
-            or any(part in (".", "..") for part in directory.split("/"))
+            or any(part in (".", "..") or (directory and not part) for part in directory.split("/"))
             or type(size) is not int or size <= 0
             or not isinstance(mtime, str) or not mtime
             or type(item.get("available", True)) is not bool
@@ -263,7 +263,8 @@ def discover_assets(*, provider: ProviderPort, repo: Repository, config: BridgeC
                 fid, item = min(active, key=lambda entry: (-entry[1]["rank"], entry[0], entry[1]["file_id"]))
                 rel = item["rel_dir"] + "/" + item["name"]
                 if not repo.discovery_visible(scope=scope, provider_instance_id=config.provider_instance_id,
-                                              file_id=item["file_id"], folder_id=fid, relative_path=rel):
+                                              file_id=item["file_id"], folder_id=fid, relative_path=rel,
+                                              name=item["name"], size=item["size"], mtime=item["mtime"], generation=generation):
                     session["pages"][fid]["queue"].pop(0)
                     continue
                 if verifications >= MAX_VERIFICATIONS:
@@ -275,7 +276,9 @@ def discover_assets(*, provider: ProviderPort, repo: Repository, config: BridgeC
                     warnings.add("candidate_unavailable")
                     continue
                 if not repo.discovery_visible(scope=scope, provider_instance_id=config.provider_instance_id,
-                                              file_id=item["file_id"], folder_id=fid, relative_path=rel):
+                                              file_id=item["file_id"], folder_id=fid, relative_path=rel,
+                                              name=item["name"], size=item["size"], mtime=item["mtime"],
+                                              generation=generation, content_sha256=evidence["sha256"]):
                     continue
                 token = secrets.token_urlsafe(32)
                 evidence.update(scope=scope, allowlist=allowlist, provider_id=config.provider_instance_id,
@@ -324,7 +327,9 @@ def validate_candidate(*, provider: ProviderPort, repo: Repository, config: Brid
         rel = saved["rel_dir"] + "/" + saved["name"]
         try:
             visible = repo.discovery_visible(scope=scope, provider_instance_id=config.provider_instance_id,
-                file_id=saved["file_id"], folder_id=saved["folder_id"], relative_path=rel)
+                file_id=saved["file_id"], folder_id=saved["folder_id"], relative_path=rel,
+                name=saved["name"], size=saved["size"], mtime=saved["mtime"],
+                generation=saved["generation"], content_sha256=saved["sha256"])
         except (StorageError, sqlite3.Error):
             raise BridgeError("storage_error") from None
         if not visible:
