@@ -1,6 +1,6 @@
 # CP-02 — Preregistered dense comparison protocol
 
-Status: Phase 1 (Japanese smoke and SciFact) was measured independently. The full-LMEB Phase 2 conditions below were fixed before its model inference. The user explicitly authorized evaluation work and PRs to the experimental CPersona fork. This remains a standalone evaluation and does not change the Bridge runtime or provider contracts.
+Status: Phase 1 (Japanese smoke and SciFact) was measured independently. The full-LMEB Phase 2 conditions below were fixed before its model inference. Jina is complete; BGE-M3 is paused after LongMemEval group 8; Gemma is unrun. See the [2026-10-28 handoff](20-cp02-handoff-status.md) and detailed [CPersona checkpoint report](https://github.com/pippirium/CPersona/tree/feat/cp02-fair-embedding-comparison/docs/research/cp02-full-lmeb-checkpoint-2026-10-28.ja.md). The user permits PR creation in the experimental CPersona fork, but this handoff is branch-push only and creates no PR. This remains a standalone evaluation and does not change the Bridge runtime or provider contracts.
 
 ## Fixed inputs
 
@@ -37,4 +37,4 @@ The LMEB [paper](https://arxiv.org/abs/2603.12572) and [processed dataset](https
 
 ## Delivery boundary
 
-Create an independent evaluation PR against the user's `pippirium/CPersona` fork's `master`; never push or open a PR against `Cloto-dev/CPersona`. Bridge #19 is complete only after the fork PR, measured report and reproducibility artifacts are reviewed and merged. Existing published PoC/LMEB scores are reference history and are never copied as new measurements.
+This handoff pushes the experimental-fork branch and measurement documentation without a PR; it does not complete Bridge #19. The full BGE-M3 and Gemma runs, paired analysis and report review remain. A PR to the user's `pippirium/CPersona` fork is permitted, but no merge authorization is recorded. Never push or open a PR against `Cloto-dev/CPersona`. Existing published PoC/LMEB scores are reference history and are never copied as new measurements.
