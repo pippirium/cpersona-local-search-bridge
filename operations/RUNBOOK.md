@@ -273,22 +273,6 @@ unavailable scoped result, not a recall measurement. Call `get_asset`
 separately when the user explicitly requests image display.
 
 
-## Explicitly associate an image with a memory
-
-After the user approves an association, the trusted host obtains the actual
-`memory_ref` from CPersona recall/reconstruct and calls `link_registered_asset`
-with either the owner-scoped `asset_id` or an explicitly selected discovery
-`candidate_token`. A pending asset can be linked before indexing, but cannot be
-fetched until it resolves. The Bridge validates reference syntax only; a
-well-formed fabricated reference cannot be distinguished from a real one
-without consulting CPersona, so the host must supply actual returned refs.
-Replays are idempotent only while the identity remains safe; changed content
-or index evidence is refused. Historical external assets without a content
-digest are not rebound through candidate selection; retain the old association
-or investigate and explicitly re-establish it rather than guessing.
-Use `unlink_asset` to remove an association without deleting the image.
-
- 
 ## IMG-09 — Safe image → index → memory association → later recall
 
 Full isolated E2E acceptance and matrix: [docs/20](../docs/20-img09-three-process-acceptance.md).
@@ -363,3 +347,19 @@ uv run pytest -q
 uv run pytest tests/security -q
 BRIDGE_THREE_PROCESS_CPERSONA_PYTHON=<test-python> BRIDGE_THREE_PROCESS_LOCAL_SEARCH=<test-provider> uv run pytest tests/integration/test_three_process.py -q
 ```
+
+## Explicitly associate an image with a memory
+
+After the user approves an association, the trusted host obtains the actual
+`memory_ref` from CPersona recall/reconstruct and calls `link_registered_asset`
+with either the owner-scoped `asset_id` or an explicitly selected discovery
+`candidate_token`. A pending asset can be linked before indexing, but cannot be
+fetched until it resolves. The Bridge validates reference syntax only; a
+well-formed fabricated reference cannot be distinguished from a real one
+without consulting CPersona, so the host must supply actual returned refs.
+Replays are idempotent only while the identity remains safe; changed content
+or index evidence is refused. Historical external assets without a content
+digest are not rebound through candidate selection; retain the old association
+or investigate and explicitly re-establish it rather than guessing.
+Use `unlink_asset` to remove an association without deleting the image.
+
