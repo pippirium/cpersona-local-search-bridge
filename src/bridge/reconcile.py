@@ -155,6 +155,15 @@ def resolve_pending(
             report.waiting.append(
                 {"asset_id": pending["asset_id"], "reason": "detail_mismatch"})
             continue
+        # New owned inputs have a byte digest; name/size evidence alone cannot
+        # establish that the managed copy has not been replaced in place.
+        owned_asset = repo.asset(pending["asset_id"], config.provider_instance_id)
+        if repo.asset_has_owner(asset_id=pending["asset_id"]):
+            from bridge.managed_store import verify_digest
+            if (not owned_asset or config.managed_root is None
+                    or not verify_digest(config.managed_root, rel, owned_asset.get("content_sha256"), size)):
+                report.waiting.append({"asset_id": pending["asset_id"], "reason": "identity_mismatch"})
+                continue
         try:
             repo.bind_pending_locator(
                 asset_id=pending["asset_id"],

@@ -147,7 +147,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"bridge_health", "link_asset", "unlink_asset",
                     "search_assets", "list_memory_assets", "get_asset",
-                    "register_asset", "resolve_pending_assets", "audit_assets"}
+                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
@@ -188,3 +188,38 @@ async def test_health_reports_attached_repository_schema_version(tmp_path):
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["storage"]["schema_version"] == 2
+
+
+@pytest.mark.anyio
+async def test_ingest_image_wire_success_and_scope_bound(tmp_path):
+    import base64
+    import io
+    from PIL import Image
+    from bridge.repository import Repository, open_repository
+
+    root = tmp_path / "managed"
+    cfg = validate_config(data_dir=tmp_path / "db", provider_base_url="http://127.0.0.1:18765",
+                          managed_root=root, managed_folder_id=1)
+    class Provider(FakeProvider):
+        def folders(self):
+            return [{"id": 1, "watch": True, "path": str(root)}]
+    repo = Repository(open_repository(tmp_path / "db"))
+    server = create_server(BridgeContext(config=cfg, provider=Provider(), db=repo))
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 2), "red").save(buf, "PNG")
+    async with connected_client(server) as session:
+        response = await session.call_tool("ingest_image", {"agent_id": "a",
+            "image_base64": base64.b64encode(buf.getvalue()).decode()})
+        payload = response.structured_content
+        assert payload["ok"] and payload["ingest_status"] == "pending"
+        assert repo.owned_asset(scope=("", "a", "", ""), asset_id=payload["asset_id"])
+        from jsonschema import Draft202012Validator
+        import json
+        from pathlib import Path
+        spec = json.loads((Path(__file__).resolve().parents[2] / "fixtures/contracts/image-input/requests.json").read_text())
+        validator = Draft202012Validator(spec["responses"]["ingest_image"])
+        validator.validate(payload)
+        error = await session.call_tool("ingest_image", {"agent_id": "a", "image_base64": "!bad"})
+        validator.validate(error.structured_content)
+        assert error.structured_content["error"]["code"] == "invalid_request"
+    repo.close()

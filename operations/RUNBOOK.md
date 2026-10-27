@@ -172,3 +172,23 @@ rebuild: `bridge_health` → `audit_assets` (dry) → decide → optionally
   purpose (docs/03 §7 — no implicit actions).
 - Managed deletions are not implemented at all; orphan findings are the
   input to a future operator-authorized cleanup, not a trigger.
+
+
+## IMG-02 schema upgrade and rollback
+
+Before starting code with schema v2, stop writers and make a consistent SQLite
+online backup together with a matching snapshot of the configured managed
+root. Startup migrates v1 to v2 and preserves existing links and locators.
+After upgrading, verify the reported schema version and audit managed assets.
+An older binary rejects a v2 database; rollback requires restoring the matching
+pre-upgrade database and managed-root snapshot, not dropping owner records.
+Retain the v2 backup separately if any images were registered after upgrade.
+
+`ingest_image` requires an explicitly configured managed root and folder ID
+that local-search has registered and watches. The Bridge checks that the
+provider folder and configured root refer to the same directory. The trusted
+host must explicitly send supported image bytes as bounded standard Base64;
+no memory is linked until a separate explicit association. Run
+`resolve_pending_assets` after the provider indexes the managed copy. A
+failed import may leave a content-addressed orphan; audit reports managed
+files and removal requires a separate operator action.

@@ -271,6 +271,19 @@ def get_asset(
         except BridgeError as exc:
             return fail(exc.code, aid=asset_id)
 
+        # Managed content is immutable: metadata alone cannot detect a same-size
+        # replacement with preserved timestamps. Compare the stored digest before
+        # returning any bytes; never refresh trusted evidence on mismatch.
+        if asset.get("origin") == "managed" and asset.get("content_sha256"):
+            import hashlib
+            if hashlib.sha256(data).hexdigest() != asset["content_sha256"]:
+                try:
+                    apply_transition(repo, asset_id=asset_id, provider_instance_id=provider_instance_id,
+                                     src=asset["locator_status"], dst="stale")
+                except Exception:
+                    pass
+                return fail("asset_unavailable", aid=asset_id)
+
         # ---- gate 6: MIME gate on the actual BYTES ----------------------------
         # Bytes are authoritative (T-11): content whose magic no image
         # signature explains is rejected even when the provider's Content-Type

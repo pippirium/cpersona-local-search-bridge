@@ -33,7 +33,9 @@ normalization is exactly D-16. IDs are lowercase UUIDv4 strings except for
 opaque staging/candidate/cursor tokens. JSON fields are case sensitive. The
 success envelope is `{"ok":true,...}`; errors are
 `{"ok":false,"error":{"code":...}}` with no paths, payloads or foreign
-scope information. Unknown and inaccessible IDs have the same
+scope information. Typed MCP results may include unused success fields as `null`
+on errors and `error: null` on success; no actual partial result is returned.
+Unknown and inaccessible IDs have the same
 `asset_not_found` result. Unsupported image type uses `unsupported_media`,
 oversize uses `media_too_large`, malformed arguments use `invalid_request`,
 dependency and index faults use the existing codes in docs/04. Storage full

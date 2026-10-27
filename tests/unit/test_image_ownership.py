@@ -67,3 +67,30 @@ def test_shared_locator_only_accepts_matching_managed_content(tmp_path):
         repo.bind_pending_locator(asset_id=c, **common)
     assert repo.locator_status(c, "test-provider") == "pending"
     repo.close()
+
+
+def test_restore_v1_backup_and_old_binary_rejects_v2(tmp_path):
+    v1_dir = tmp_path / "v1_migrations"
+    v1_dir.mkdir()
+    source = Path(__file__).resolve().parents[2] / "migrations/0001_v1.sql"
+    (v1_dir / source.name).write_text(source.read_text())
+    conn = open_repository(tmp_path, migrations_dir=v1_dir)
+    backup = sqlite3.connect(tmp_path / "backup.db")
+    conn.backup(backup)
+    backup.close()
+    conn.close()
+    upgraded = open_repository(tmp_path)
+    upgraded.close()
+    from bridge.repository import SchemaTooNew
+    with pytest.raises(SchemaTooNew):
+        open_repository(tmp_path, migrations_dir=v1_dir)
+    restored_dir = tmp_path / "restored"
+    restored_dir.mkdir()
+    restored = sqlite3.connect(restored_dir / "bridge.db")
+    backup = sqlite3.connect(tmp_path / "backup.db")
+    backup.backup(restored)
+    restored.close()
+    backup.close()
+    conn = open_repository(restored_dir, migrations_dir=v1_dir)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+    conn.close()

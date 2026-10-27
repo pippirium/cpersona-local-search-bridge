@@ -37,6 +37,10 @@ class StorageError(Exception):
     """Repository-level failure; carries no paths or SQL text."""
 
 
+class RequestConflict(StorageError):
+    """An idempotency key was reused for a different operation input."""
+
+
 class SchemaTooNew(StorageError):
     """Stored user_version exceeds what this code knows: refuse to open."""
 
@@ -553,6 +557,25 @@ class Repository:
                 (*normalized, asset_id),
             ).fetchone() is not None
 
+    def asset_has_owner(self, *, asset_id: str) -> bool:
+        with self.lock:
+            return self._conn.execute(
+                "SELECT 1 FROM asset_owners WHERE asset_id=?", (asset_id,),
+            ).fetchone() is not None
+
+    def check_image_request(self, *, scope: tuple[str, str, str, str], request_id: str,
+                            digest: str) -> None:
+        """Reject a known conflicting retry before publishing a managed copy."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            prior = self._conn.execute(
+                "SELECT fingerprint FROM image_requests WHERE source_instance_id=? AND agent_id=?"
+                " AND project_id=? AND channel=? AND operation='ingest_image' AND request_id=?",
+                (*scope, request_id),
+            ).fetchone()
+            if prior and prior[0] != digest:
+                raise RequestConflict("request id conflict")
+
     def create_owned_image(self, *, scope: tuple[str, str, str, str],
                            asset_id: str, digest: str, relative_path: str,
                            media_type: str, size_bytes: int, provider_instance_id: str,
@@ -572,7 +595,7 @@ class Repository:
                     ).fetchone()
                     if prior:
                         if prior[0] != digest:
-                            raise StorageError("request id conflict")
+                            raise RequestConflict("request id conflict")
                         self._conn.commit()
                         return {"asset_id": prior[1], "deduplicated": bool(prior[2]), "status": prior[3]}
                 prior_asset = self._conn.execute(
@@ -624,7 +647,8 @@ class Repository:
                 return None
             cur = self._conn.execute(
                 "SELECT asset_id, relative_managed_path, media_type, size_bytes"
-                " FROM assets WHERE origin='managed' AND content_sha256 = ?",
+                " FROM assets a WHERE origin='managed' AND content_sha256 = ?"
+                " AND NOT EXISTS (SELECT 1 FROM asset_owners o WHERE o.asset_id=a.asset_id)",
                 (content_sha256,),
             )
             row = cur.fetchone()

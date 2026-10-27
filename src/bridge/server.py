@@ -8,6 +8,7 @@ stdio per docs/12 §1.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 
 from mcp.server.mcpserver import MCPServer
 
@@ -18,6 +19,7 @@ from bridge.repository import Repository, latest_known_version
 from bridge.tools_link import LinkResult, UnlinkResult
 from bridge.tools_get import GetAssetResult, get_asset as _get_impl
 from bridge.tools_import import RegisterAssetResult, register_asset as _register_impl
+from bridge.tools_ingest import IngestResult, ingest_image as _ingest_impl
 from bridge.audit import AuditReport, audit as _audit_impl
 from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
@@ -72,6 +74,7 @@ class HealthResult:
     managed_enabled: bool = False
     managed_folder_registered: bool | None = None
     managed_watch: bool | None = None
+    managed_root_matches: bool | None = None
 
 
 def _storage_health(ctx: BridgeContext) -> StorageHealth:
@@ -110,6 +113,7 @@ def bridge_health(ctx: BridgeContext) -> HealthResult:
     managed_enabled = ctx.config.managed_folder_id is not None
     managed_registered: bool | None = None
     managed_watch: bool | None = None
+    managed_root_matches: bool | None = None
     if managed_enabled:
         try:
             folders = ctx.provider.folders()
@@ -120,6 +124,14 @@ def bridge_health(ctx: BridgeContext) -> HealthResult:
             )
             managed_registered = match is not None
             managed_watch = bool(match.get("watch")) if match else None
+            if match is not None:
+                try:
+                    managed_root_matches = bool(match.get("path")) and os.path.samefile(
+                        ctx.config.managed_root, match["path"])
+                except OSError:
+                    managed_root_matches = False
+                if not managed_root_matches:
+                    warnings.append("managed_folder_mismatch")
             if match is None:
                 warnings.append("managed_folder_unregistered")
             elif not managed_watch:
@@ -133,6 +145,7 @@ def bridge_health(ctx: BridgeContext) -> HealthResult:
         managed_enabled=managed_enabled,
         managed_folder_registered=managed_registered,
         managed_watch=managed_watch,
+        managed_root_matches=managed_root_matches,
         schema_version=_storage_health(ctx).schema_version,
         provider_instance_id=ctx.config.provider_instance_id,
         provider=provider,
@@ -161,6 +174,21 @@ def create_server(ctx: BridgeContext) -> MCPServer:
     )
     def _bridge_health() -> HealthResult:
         return bridge_health(ctx)
+
+    @server.tool(
+        name="ingest_image",
+        description="Explicitly register bounded image data in the configured managed folder. "
+                    "No memory association is created; indexing occurs asynchronously.",
+    )
+    def _ingest_image(agent_id: str, image_base64: str, project_id: str = "",
+                      channel: str = "", source_instance_id: str = "",
+                      client_request_id: str | None = None) -> IngestResult:
+        if ctx.db is None:
+            return IngestResult(ok=False, error=error_result("storage_error")["error"])
+        return _ingest_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config,
+                            agent_id=agent_id, image_base64=image_base64, project_id=project_id,
+                            channel=channel, source_instance_id=source_instance_id,
+                            client_request_id=client_request_id)
 
     # ---- link tools (B-07) ----------------------------------------------------
 
