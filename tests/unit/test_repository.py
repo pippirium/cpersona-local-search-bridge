@@ -92,7 +92,7 @@ def test_schema_too_new_refuses_open(tmp_path):
 
 
 def test_latest_known_version_matches_migrations():
-    assert latest_known_version() == 3
+    assert latest_known_version() == 4
 
 
 # ---- links: idempotence, scope, validation -------------------------------------
