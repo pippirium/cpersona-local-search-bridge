@@ -79,6 +79,7 @@ flowchart LR
 | [12 — 脅威モデル・メディア方針](docs/12-threat-model-media-policy.md) | B-03確定事項: 信頼境界・T-01〜T-15負例表・取得上限（8MB/40MP/JPEG,PNG,WebP,GIF）・HTTPクライアント規則・ログ秘匿監査 |
 | [13 — LS-01 locator監査](docs/13-ls01-locator-audit.md) | reindex/move/消失/rowid再利用でのfile_id耐久性とsearch folder_id制約の結論（**local-search変更不要**・制限は明記） |
 | [15 — B-13 実provider監査ログ](docs/15-b13-live-audit-log.md) | 実local-search(31f31048)で実測した耐久・404・rebuildスワップ・在庫route訂正の証跡（eval/README.md と併読） |
+| [20 — IMG-09 3プロセス拡張受入](docs/20-img09-three-process-acceptance.md) | 2系統の画像入力、明示リンク、想起、scope負例・運用復旧手順の合成E2E（実行待ち。#62依存） |
 | [16 — 3プロセス受入試験](docs/16-three-process-acceptance.md) | 実CPersona・Bridge stdioプロセスと隔離local-searchの合成画像フロー（fake embedder、品質評価ではない） |
 | [17 — 実モデル色画像probe](docs/17-real-color-probe.md) | 固定revisionのEmbeddingGemma 2・合成12クエリの実測と限界、per-query成果物 |
 | [19 — 画像入力 API の設計契約](docs/19-image-input-contract.md) | 未索引画像の入力・所有scope・明示リンク・安全な検索（設計のみ） |
