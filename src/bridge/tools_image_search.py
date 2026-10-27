@@ -63,7 +63,7 @@ def _query_asset(*, provider: ProviderPort, repo: Repository, config: BridgeConf
     return validate_image(data, max_bytes=config.max_fetch_bytes, max_pixels=config.max_pixels)
 
 
-def _linked_identity(*, provider: ProviderPort, config: BridgeConfig, asset: dict,
+def _linked_identity(*, provider: ProviderPort, max_fetch_bytes: int, asset: dict,
                      item: dict, generation: str) -> bool:
     if asset.get("locator_status") != "ready" or asset.get("media_kind") != "image":
         return False
@@ -94,8 +94,9 @@ def _linked_identity(*, provider: ProviderPort, config: BridgeConfig, asset: dic
                 or str(detail.get("rel_dir", "")) + "/" + str(detail.get("name", "")) != asset.get("relative_managed_path")
                 or not asset.get("content_sha256")):
             return False
+    if asset.get("content_sha256"):
         try:
-            data, _ = provider.file_content(file_id, config.max_fetch_bytes)
+            data, _ = provider.file_content(file_id, max_fetch_bytes)
         except BridgeError as exc:
             if exc.code in ("asset_unavailable", "media_too_large"):
                 return False
@@ -104,7 +105,7 @@ def _linked_identity(*, provider: ProviderPort, config: BridgeConfig, asset: dic
             return False
         again = provider.file_detail(file_id)
         if (not isinstance(again, dict) or again.get("kind") != "image" or not again.get("available", True)
-                or any(again.get(k) != detail.get(k) for k in fields)):
+                or again.get("status") != "indexed" or any(again.get(k) != detail.get(k) for k in fields)):
             return False
     return True
 
@@ -165,7 +166,7 @@ def search_assets_by_image(*, provider: ProviderPort, repo: Repository, config: 
                         continue
                     seen.add(asset_id)
                     asset = repo.asset(asset_id, config.provider_instance_id)
-                    if not asset or not _linked_identity(provider=provider, config=config, asset=asset,
+                    if not asset or not _linked_identity(provider=provider, max_fetch_bytes=config.max_fetch_bytes, asset=asset,
                                                          item=item, generation=generation):
                         warning = "asset_unavailable"
                         continue
