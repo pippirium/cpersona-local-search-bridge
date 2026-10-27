@@ -176,3 +176,20 @@ def test_pending_resolution_rejects_same_size_changed_copy(tmp_path):
     assert not report.bound and report.waiting[0]["reason"] == "identity_mismatch"
     assert repo.locator_status(result.asset_id, config.provider_instance_id) == "pending"
     repo.close()
+
+
+def test_pending_resolution_rejects_repointed_provider_folder(tmp_path):
+    from bridge.provider import FakeFile
+    from bridge.reconcile import resolve_pending
+    config, provider, repo = setup(tmp_path)
+    result = call(config, provider, repo)
+    asset = repo.asset(result.asset_id, config.provider_instance_id)
+    shard, name = asset["relative_managed_path"].split("/")
+    provider.files[9] = FakeFile(file_id=9, folder_id=1, name=name, rel_dir=shard,
+                                size=asset["size_bytes"], status="indexed")
+    provider.folder_files[1] = [9]
+    provider.root = tmp_path
+    report = resolve_pending(provider=provider, repo=repo, config=config)
+    assert not report.bound and report.waiting[0]["reason"] == "identity_mismatch"
+    assert repo.locator_status(result.asset_id, config.provider_instance_id) == "pending"
+    repo.close()
