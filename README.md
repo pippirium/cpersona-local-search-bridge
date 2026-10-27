@@ -81,6 +81,7 @@ flowchart LR
 | [15 — B-13 実provider監査ログ](docs/15-b13-live-audit-log.md) | 実local-search(31f31048)で実測した耐久・404・rebuildスワップ・在庫route訂正の証跡（eval/README.md と併読） |
 | [16 — 3プロセス受入試験](docs/16-three-process-acceptance.md) | 実CPersona・Bridge stdioプロセスと隔離local-searchの合成画像フロー（fake embedder、品質評価ではない） |
 | [17 — 実モデル色画像probe](docs/17-real-color-probe.md) | 固定revisionのEmbeddingGemma 2・合成12クエリの実測と限界、per-query成果物 |
+| [19 — 画像入力 API の設計契約](docs/19-image-input-contract.md) | 未索引画像の入力・所有scope・明示リンク・安全な検索（設計のみ） |
 | [RUNBOOK](operations/RUNBOOK.md) | インストール・MCP登録・pin表・backup/restore・rebuild対応・診断・プライバシー点検・既知の限界 |
 | [RELEASE-CHECKLIST](operations/RELEASE-CHECKLIST.md) | リリースゲート（実測記録・運用リハ・セキュリティ・文書誠実性） |
 | [14 — CP-01 ユーザー導線](docs/14-cp01-asset-workflow.md) | 記憶ref→link→表示の運用フロー・本文トレーラ形式 `[asset:<uuid4>]`・合成運用サンプル（**CPersona fork変更なし**で成立） |

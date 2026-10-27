@@ -77,3 +77,7 @@ README and docs/04 describe current development runtime, docs/06 preserves origi
 ## D-28 — Real-model probe evidence stays dataset-bounded (B-14, #20)
 
 A predeclared 12-query, three-image RGB manifest was run against pinned real EmbeddingGemma 2 in an isolated provider (docs/17). Commit per-query output and model/manifest fingerprints without private paths, rather than promoting fake scores or this trivial probe to general-quality/model-comparison claims. Report priming/cache limitations and missing cold/resource baselines explicitly. The schema's leading comment becomes standard `$comment`, with no semantic/version change. No provider source or live data/config modifications.
+
+## D-30 — Explicit unlinked-image ownership and input contract (IMG-01, #55)
+
+The proposed image APIs use bounded data or an operator-controlled staging handoff and store exact-scope owner evidence independently of memory links. Deduplication must not reveal other-scope ownership; legacy links retain their prior visibility. User approval and CPersona reference provenance are trusted-host responsibilities, not self-asserted authentication. EmbeddingGemma 2, stdio and the existing explicit fetch boundary remain unchanged. [docs/19](19-image-input-contract.md) specifies the design, migration and rollback; this decision does not claim runtime implementation. D-30 is reserved here because the concurrent CP-02 PR uses D-29.
