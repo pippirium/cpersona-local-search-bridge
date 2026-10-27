@@ -187,7 +187,7 @@ async def test_health_reports_attached_repository_schema_version(tmp_path):
     async with connected_client(server) as session:
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
-        assert payload["storage"]["schema_version"] == 3
+        assert payload["storage"]["schema_version"] == 4
 
 
 @pytest.mark.anyio
