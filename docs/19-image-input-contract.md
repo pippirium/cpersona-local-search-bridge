@@ -69,13 +69,18 @@ envelope and no partial result. JSON `null` is accepted only where stated.
 | `set_asset_metadata` | `asset_id`, `metadata_patch: object` | `asset_id`, `metadata` |
 | `get_asset_metadata` | `asset_id` | `asset_id`, `metadata` |
 
-`ingest_status` is the persisted locator state, not a claim that a file is
-retrievable. The `indexed` field is true only for `ready`; an explicit fetch
+`ingest_status` returned by ingestion is the persisted locator state. Status
+lookup reports an effective read-only observation: it can report stale, missing
+or incompatible for newly observed conflicts without changing the stored locator.
+Neither result is a claim that a file is retrievable. The `indexed` field is true only for `ready`; an explicit fetch
 still revalidates identity. `checked_at` is the last actual verification time,
 not the time of a read. `reason_code` is a non-sensitive enum:
 `waiting_for_index`, `page_full`, `folder_not_watched`, `provider_unavailable`,
 `index_incompatible`, `identity_mismatch`, `file_missing`, or `unknown`.
-A status lookup is read-only and never runs an operator-wide resolver. An
+A status lookup is read-only and never runs an operator-wide resolver. It makes
+at most one status, one folder, and one detail or bounded recent-page logical
+request (each GET may retry once on connection failure);
+managed copy hash verification reads at most the configured 8 MB limit locally. An
 operator explicitly invokes `resolve_pending_assets`; transient provider
 errors must not create a false ready state. `pending` is retryable; `missing`
 or `stale` are retryable only through explicit revalidation; `incompatible`

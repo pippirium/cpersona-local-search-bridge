@@ -134,6 +134,17 @@ def resolve_pending(
             continue
         candidate = matches[0]
         file_id = int(candidate["file_id"])
+        owned = repo.asset_has_owner(asset_id=pending["asset_id"])
+        generation_before = None
+        if owned:
+            try:
+                index = provider.status().get("index") or {}
+                generation_before = index.get("generation")
+                if index.get("mismatch") or generation_before is None:
+                    raise BridgeError("index_incompatible")
+            except BridgeError:
+                report.waiting.append({"asset_id": pending["asset_id"], "reason": "index_unavailable"})
+                continue
         # the listing alone is never enough: the detail probe must confirm.
         # recent has no available flag guarantee beyond ResultItem; folder
         # filter happens client-side, and detail re-checks folder_id.
@@ -158,7 +169,7 @@ def resolve_pending(
         # New owned inputs have a byte digest; name/size evidence alone cannot
         # establish that the managed copy has not been replaced in place.
         owned_asset = repo.asset(pending["asset_id"], config.provider_instance_id)
-        if repo.asset_has_owner(asset_id=pending["asset_id"]):
+        if owned:
             import os
             from bridge.managed_store import verify_digest
             try:
@@ -172,11 +183,20 @@ def resolve_pending(
                     or not verify_digest(config.managed_root, rel, owned_asset.get("content_sha256"), size)):
                 report.waiting.append({"asset_id": pending["asset_id"], "reason": "identity_mismatch"})
                 continue
+        if owned:
+            try:
+                index_after = provider.status().get("index") or {}
+                if index_after.get("mismatch") or str(index_after.get("generation")) != str(generation_before):
+                    raise BridgeError("index_incompatible")
+            except BridgeError:
+                report.waiting.append({"asset_id": pending["asset_id"], "reason": "index_unavailable"})
+                continue
         try:
             repo.bind_pending_locator(
                 asset_id=pending["asset_id"],
                 provider_instance_id=config.provider_instance_id,
                 provider_file_id=file_id,
+                provider_generation=str(generation_before) if owned else None,
                 last_seen_kind="image",
                 last_seen_name=detail.get("name"),
                 last_seen_mtime=detail.get("mtime"),

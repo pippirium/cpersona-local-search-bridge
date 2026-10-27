@@ -633,12 +633,19 @@
                 "index_incompatible",
                 "identity_mismatch",
                 "file_missing",
-                "unknown"
+                "unknown",
+                null
               ]
             },
             "checked_at": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "date-time"
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -682,6 +689,24 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "asset_id": {
+              "type": "null"
+            },
+            "status": {
+              "type": "null"
+            },
+            "indexed": {
+              "type": "null"
+            },
+            "retryable": {
+              "type": "null"
+            },
+            "reason_code": {
+              "type": "null"
+            },
+            "checked_at": {
+              "type": "null"
             }
           },
           "required": [

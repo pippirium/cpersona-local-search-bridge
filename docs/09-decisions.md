@@ -85,3 +85,7 @@ The proposed image APIs use bounded data or an operator-controlled staging hando
 ## D-31 — Typed result null fields (IMG-02, #56)
 
 MCP SDK typed result serialization includes unused optional fields as JSON null. The ingest success and error schema allows these null fields while forbidding actual partial results on errors. This corrects the proposed response shape to match the executable wire behavior; it does not change authorization or media-return rules.
+
+## D-32 — Scoped, read-only status observation (IMG-04, #58)
+
+Status reads perform bounded provider and managed-copy checks without writing the locator or invoking the global resolver. A freshly observed identity failure, deletion or index conflict is reported as stale, missing or incompatible even if the stored state has not changed. Provider outages preserve the stored status but set indexed false and supply a retryable reason. checked_at remains the last stored verification time, not the time of this read. Resolution of new owned assets captures the provider index generation after confirming it remains unchanged across the identity checks; missing or changing generation leaves the asset pending.
