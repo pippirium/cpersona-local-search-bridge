@@ -103,6 +103,21 @@ def test_ingest_then_live_watcher_resolves(tmp_path):
                     foreign = discover_assets(provider=provider, repo=repo, config=cfg, state=discovery,
                                               agent_id="other", query="赤", folder_id=folder_id)
                     assert foreign.ok and foreign.candidates == []
+                    from bridge.tools_link import link_asset
+                    from bridge.tools_image_search import search_assets_by_image
+                    red_asset = repo.asset(result.asset_id, cfg.provider_instance_id)
+                    linked = link_asset(provider=provider, repo=repo, provider_instance_id=cfg.provider_instance_id,
+                        source_instance_id="", agent_id="synthetic", project_id="", channel="", memory_ref="mem:1",
+                        provider_file_id=red_asset["provider_file_id"])
+                    assert linked.ok
+                    for image_args in ({"query_asset_id": result.asset_id},
+                                       {"image_base64": base64.b64encode(buf.getvalue()).decode()}):
+                        hits = search_assets_by_image(provider=provider, repo=repo, config=cfg,
+                                                      agent_id="synthetic", **image_args)
+                        assert hits.ok and result.asset_id in [item.asset_id for item in hits.results]
+                    outside = search_assets_by_image(provider=provider, repo=repo, config=cfg,
+                        agent_id="other", image_base64=base64.b64encode(buf.getvalue()).decode())
+                    assert outside.ok and outside.results == []
                 finally:
                     provider.close()
                     repo.close()

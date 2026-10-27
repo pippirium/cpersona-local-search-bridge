@@ -42,3 +42,8 @@ registers folders and never touches provider data outside that folder.
 ## Solid-color real-model probe
 
 `manifest.colors.json` declares three deterministic solid RGB PNGs and twelve cases: six Japanese/English text queries, three exact-image queries and three memory associations. Grade 3 is assigned only to the stated color's image before execution. This is a tiny controlled color-retrieval probe, not a representative dataset or a model-comparison claim. Run with the same CLI against an isolated provider with real weights; record `/api/status` model revision/device/dtype, provider commit, manifest SHA-256 and the generated per-query report. Never promote the fake-embedder run to real-model evidence.
+
+
+IMG-06 adds a user-facing `search_assets_by_image` MCP tool that delegates to
+the same local-search media endpoint. This evaluation remains separate: fake
+embeddings and this tool's availability do not establish retrieval quality.

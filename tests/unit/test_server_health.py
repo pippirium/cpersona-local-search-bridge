@@ -147,7 +147,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"bridge_health", "link_asset", "unlink_asset",
                     "search_assets", "list_memory_assets", "get_asset",
-                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image", "discover_assets"}
+                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image", "discover_assets", "search_assets_by_image"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
@@ -290,4 +290,28 @@ async def test_discovery_wire_is_schema_valid_and_never_contains_image_bytes(tmp
         denied = await session.call_tool("discover_assets", {"agent_id": "a", "query": "synthetic", "folder_id": 999})
         validator.validate(denied.structured_content)
         assert denied.structured_content["error"]["code"] == "asset_not_found"
+    repo.close()
+
+
+@pytest.mark.anyio
+async def test_image_search_wire_schema_and_no_image_response(tmp_path):
+    import json
+    from pathlib import Path
+    from jsonschema import Draft202012Validator
+    from tests.unit.test_tools_ingest import setup
+    from tests.unit.test_tools_image_search import make_linked, encoded
+    cfg, provider, repo = setup(tmp_path)
+    make_linked(cfg, provider, repo)
+    server = create_server(BridgeContext(config=cfg, provider=provider, db=repo))
+    spec = json.loads((Path(__file__).resolve().parents[2] /
+                       "fixtures/contracts/image-input/requests.json").read_text())
+    validator = Draft202012Validator(spec["responses"]["search_assets_by_image"])
+    async with connected_client(server) as session:
+        result = await session.call_tool("search_assets_by_image", {"agent_id": "a", "image_base64": encoded()})
+        validator.validate(result.structured_content)
+        assert result.structured_content["ok"] and len(result.structured_content["results"]) == 1
+        assert all(item.type != "image" for item in result.content)
+        bad = await session.call_tool("search_assets_by_image", {"agent_id": "a"})
+        validator.validate(bad.structured_content)
+        assert bad.structured_content["error"]["code"] == "invalid_request"
     repo.close()

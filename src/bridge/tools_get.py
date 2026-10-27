@@ -143,6 +143,7 @@ def get_asset(
     channel: str,
     asset_id: str,
     memory_ref: str | None = None,
+    max_fetch_bytes: int | None = None,
 ) -> "object":
     """Returns mcp Image on success, GetAssetResult on failure."""
     from mcp.server.mcpserver.utilities.types import Image
@@ -193,7 +194,8 @@ def get_asset(
         # never shrink it below what the file actually needs (that would
         # reject a legitimately grown file) — it can never raise it above the
         # cap either. Declared-evidence checks below use the fresh detail.
-        max_bytes = bridge_policy.MAX_FETCH_BYTES
+        max_bytes = bridge_policy.MAX_FETCH_BYTES if max_fetch_bytes is None else min(
+            max_fetch_bytes, bridge_policy.MAX_FETCH_BYTES)
 
         # ---- gate 3: provider revalidation on fresh evidence ------------------
         try:

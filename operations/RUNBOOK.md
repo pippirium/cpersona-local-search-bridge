@@ -257,3 +257,17 @@ single-use and, like selection tokens, live in the Bridge process for at most
 five minutes and can expire earlier on restart or capacity pressure. `partial`
 also reports provider result caps, without exposing hit counts. Selection must
 still be explicitly approved and revalidated; discovery never links a memory.
+
+
+## Explicit image-to-image search
+
+Call `search_assets_by_image` with exact scope and exactly one of a bounded
+`image_base64` argument or an owned/linked `query_asset_id`. The host must
+actually support forwarding the bytes; otherwise use an already registered
+asset ID. The Bridge validates image bytes, delegates embedding and search to
+local-search, and returns only scope-linked IDs, memory references and scores.
+No image bytes are returned and search input is not stored. A search can read
+the query and linked managed candidates internally to verify their hashes.
+At most five provider pages of 20 are scanned; `partial` reports a limit or an
+unavailable scoped result, not a recall measurement. Call `get_asset`
+separately when the user explicitly requests image display.
