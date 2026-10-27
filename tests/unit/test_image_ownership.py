@@ -46,7 +46,7 @@ def test_v1_upgrade_preserves_existing_links_and_locators(tmp_path):
     db.commit()
     db.close()
     repo = Repository(open_repository(tmp_path))
-    assert repo.schema_version() == 2
+    assert repo.schema_version() == 3
     assert repo.asset(asset, "p")["provider_file_id"] == 8
     assert repo.asset_in_scope(source_instance_id="", agent_id="a", project_id="", channel="", asset_id=asset)
     assert not repo.owned_asset(scope=SCOPE_A, asset_id=asset)

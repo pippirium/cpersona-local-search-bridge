@@ -57,7 +57,7 @@ def test_health_ok(ctx):
     assert (p.reachable, p.provider_version, p.generation, p.model_state,
             p.index_mismatch, p.checked) == (True, "0.1.1-fake", 1, "ready", None, True)
     assert h.warnings == []
-    assert h.schema_version == 2
+    assert h.schema_version == 3
 
 
 def test_health_provider_down(ctx):
@@ -147,7 +147,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"bridge_health", "link_asset", "unlink_asset",
                     "search_assets", "list_memory_assets", "get_asset",
-                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status"}
+                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
@@ -187,7 +187,7 @@ async def test_health_reports_attached_repository_schema_version(tmp_path):
     async with connected_client(server) as session:
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
-        assert payload["storage"]["schema_version"] == 2
+        assert payload["storage"]["schema_version"] == 3
 
 
 @pytest.mark.anyio
@@ -244,4 +244,28 @@ async def test_get_ingest_status_wire_contract(tmp_path):
         bad = (await session.call_tool("get_ingest_status", {"agent_id": "b", "asset_id": image.asset_id})).structured_content
         validator.validate(bad)
         assert bad["error"]["code"] == "asset_not_found" and bad["asset_id"] is None
+    repo.close()
+
+
+@pytest.mark.anyio
+async def test_staged_import_wire_contract(tmp_path):
+    import json
+    from pathlib import Path
+    from jsonschema import Draft202012Validator
+    from tests.unit.test_staging import setup, stage
+    cfg, provider, repo, original = setup(tmp_path)
+    token = stage(cfg, repo)
+    server = create_server(BridgeContext(config=cfg, provider=provider, db=repo))
+    spec = json.loads((Path(__file__).resolve().parents[2] /
+                       "fixtures/contracts/image-input/requests.json").read_text())
+    validator = Draft202012Validator(spec["responses"]["import_staged_image"])
+    async with connected_client(server) as session:
+        args = {"agent_id": "agent", "staging_id": token}
+        result = (await session.call_tool("import_staged_image", args)).structured_content
+        validator.validate(result)
+        assert result["ok"] and result["ingest_status"] == "pending"
+        denied = (await session.call_tool("import_staged_image", {**args, "agent_id": "other"})).structured_content
+        validator.validate(denied)
+        assert denied["error"]["code"] == "invalid_request" and denied["asset_id"] is None
+    assert (cfg.staging_input_root / "source.png").read_bytes() == original
     repo.close()

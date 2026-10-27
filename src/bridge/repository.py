@@ -47,9 +47,13 @@ class SchemaTooNew(StorageError):
     """Stored user_version exceeds what this code knows: refuse to open."""
 
 
-def image_request_fingerprint(digest: str, provider_instance_id: str, folder_id: int) -> str:
+def image_request_fingerprint(digest: str, provider_instance_id: str, folder_id: int,
+                              stage_hash: str | None = None) -> str:
     """Pin all effectful ingest inputs, including configured provider and folder."""
-    value = json.dumps([digest, provider_instance_id, folder_id], separators=(",", ":"))
+    parts = [digest, provider_instance_id, folder_id]
+    if stage_hash is not None:
+        parts.append(stage_hash)
+    value = json.dumps(parts, separators=(",", ":"))
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
@@ -584,41 +588,118 @@ class Repository:
             ).fetchone() is not None
 
     def check_image_request(self, *, scope: tuple[str, str, str, str], request_id: str,
-                            digest: str, provider_instance_id: str, folder_id: int) -> None:
+                            digest: str, provider_instance_id: str, folder_id: int,
+                            stage_hash: str | None = None) -> None:
         """Reject a known conflicting retry before publishing a managed copy."""
         with self.lock:
             scope = normalize_scope(*scope)
-            prior = self._conn.execute(
-                "SELECT fingerprint FROM image_requests WHERE source_instance_id=? AND agent_id=?"
-                " AND project_id=? AND channel=? AND operation='ingest_image' AND request_id=?",
-                (*scope, request_id),
-            ).fetchone()
-            if prior and prior[0] != image_request_fingerprint(digest, provider_instance_id, folder_id):
+            try:
+                prior = self._conn.execute(
+                    "SELECT fingerprint FROM image_requests WHERE source_instance_id=? AND agent_id=?"
+                    " AND project_id=? AND channel=? AND operation=? AND request_id=?",
+                    (*scope, "import_staged_image" if stage_hash else "ingest_image", request_id),
+                ).fetchone()
+            except sqlite3.Error:
+                raise StorageError("request lookup failed") from None
+            if prior and prior[0] != image_request_fingerprint(digest, provider_instance_id, folder_id, stage_hash):
                 raise RequestConflict("request id conflict")
+
+    def record_staged_image(self, *, scope: tuple[str, str, str, str], token_hash: str,
+                            digest: str, media_type: str, size_bytes: int, source_device: int,
+                            source_inode: int, source_mtime_ns: int, stage_device: int,
+                            stage_inode: int, stage_mtime_ns: int, expires_at: str) -> None:
+        with self.lock:
+            scope = normalize_scope(*scope)
+            try:
+                with self._conn:
+                    self._conn.execute(
+                        "INSERT INTO staged_images(token_hash,source_instance_id,agent_id,project_id,channel,"
+                        "content_sha256,media_type,size_bytes,source_device,source_inode,source_mtime_ns,"
+                        "stage_device,stage_inode,stage_mtime_ns,expires_at)"
+                        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (token_hash, *scope, digest, media_type, size_bytes,
+                            source_device, source_inode, source_mtime_ns, stage_device, stage_inode, stage_mtime_ns, expires_at))
+            except sqlite3.Error:
+                raise StorageError("staging record failed") from None
+
+    def staged_image(self, *, scope: tuple[str, str, str, str], token_hash: str) -> dict | None:
+        with self.lock:
+            scope = normalize_scope(*scope)
+            try:
+                row = self._conn.execute(
+                    "SELECT content_sha256,media_type,size_bytes,expires_at,consumed_asset_id,"
+                    "consumed_deduplicated,consumed_status,stage_device,stage_inode,stage_mtime_ns"
+                    " FROM staged_images WHERE token_hash=?"
+                    " AND source_instance_id=? AND agent_id=? AND project_id=? AND channel=?",
+                    (token_hash, *scope),
+                ).fetchone()
+            except sqlite3.Error:
+                raise StorageError("staging lookup failed") from None
+            if row is None or row[3] <= utc_now():
+                return None
+            return dict(zip(("digest", "media_type", "size_bytes", "expires_at", "asset_id", "deduplicated", "status", "stage_device", "stage_inode", "stage_mtime_ns"), row))
+
+    def expired_staged_images(self, *, limit: int = 100) -> list[tuple]:
+        with self.lock:
+            try:
+                return self._conn.execute(
+                    "SELECT token_hash,stage_device,stage_inode,stage_mtime_ns FROM staged_images"
+                    " WHERE expires_at<=? ORDER BY expires_at LIMIT ?", (utc_now(), min(max(1, limit), 100)),
+                ).fetchall()
+            except sqlite3.Error:
+                raise StorageError("staging lookup failed") from None
+
+    def delete_expired_staged_image(self, *, token_hash: str) -> bool:
+        with self.lock:
+            try:
+                with self._conn:
+                    cur = self._conn.execute(
+                        "DELETE FROM staged_images WHERE token_hash=? AND expires_at<=?", (token_hash, utc_now()))
+                    return bool(cur.rowcount)
+            except sqlite3.Error:
+                raise StorageError("staging cleanup failed") from None
 
     def create_owned_image(self, *, scope: tuple[str, str, str, str],
                            asset_id: str, digest: str, relative_path: str,
                            media_type: str, size_bytes: int, provider_instance_id: str,
-                           folder_id: int, request_id: str | None) -> dict:
+                           folder_id: int, request_id: str | None, stage_hash: str | None = None) -> dict:
         """Atomically create an owned pending asset, or reuse only this scope's copy."""
         with self.lock:
             scope = normalize_scope(*scope)
             if not ASSET_ID_RE.fullmatch(asset_id) or not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise StorageError("invalid identity")
-            fingerprint = image_request_fingerprint(digest, provider_instance_id, folder_id)
+            fingerprint = image_request_fingerprint(digest, provider_instance_id, folder_id, stage_hash)
+            operation = "import_staged_image" if stage_hash is not None else "ingest_image"
             try:
                 self._conn.execute("BEGIN IMMEDIATE")
+                staged = None
+                if stage_hash is not None:
+                    staged = self._conn.execute(
+                        "SELECT content_sha256,media_type,size_bytes,expires_at,consumed_asset_id,"
+                        "consumed_deduplicated,consumed_status FROM staged_images WHERE token_hash=?"
+                        " AND source_instance_id=? AND agent_id=? AND project_id=? AND channel=?",
+                        (stage_hash, *scope),
+                    ).fetchone()
+                    if staged is None or staged[3] <= utc_now() or staged[:3] != (digest, media_type, size_bytes):
+                        raise RequestConflict("staging unavailable")
                 if request_id is not None:
                     prior = self._conn.execute(
                         "SELECT fingerprint, asset_id, deduplicated, initial_status FROM image_requests"
                         " WHERE source_instance_id=? AND agent_id=? AND project_id=? AND channel=?"
-                        " AND operation='ingest_image' AND request_id=?", (*scope, request_id),
+                        " AND operation=? AND request_id=?", (*scope, operation, request_id),
                     ).fetchone()
                     if prior:
                         if prior[0] != fingerprint:
                             raise RequestConflict("request id conflict")
                         self._conn.commit()
                         return {"asset_id": prior[1], "deduplicated": bool(prior[2]), "status": prior[3]}
+                if staged is not None and staged[4] is not None:
+                    if request_id is not None:
+                        self._conn.execute(
+                            "INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,operation,"
+                            "request_id,fingerprint,asset_id,deduplicated,initial_status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (*scope, operation, request_id, fingerprint, staged[4], staged[5], staged[6]))
+                    self._conn.commit()
+                    return {"asset_id": staged[4], "deduplicated": bool(staged[5]), "status": staged[6]}
                 prior_asset = self._conn.execute(
                     "SELECT a.asset_id, l.status FROM asset_owners o JOIN assets a ON a.asset_id=o.asset_id"
                     " JOIN provider_locators l ON l.asset_id=a.asset_id AND l.provider_instance_id=?"
@@ -644,12 +725,15 @@ class Repository:
                         "INSERT INTO asset_owners(asset_id,source_instance_id,agent_id,project_id,channel,"
                         "registered_at,content_sha256) VALUES(?,?,?,?,?,?,?)", (asset_id, *scope, now, digest),
                     )
+                if stage_hash is not None:
+                    self._conn.execute(
+                        "UPDATE staged_images SET consumed_asset_id=?,consumed_deduplicated=?,consumed_status=?"
+                        " WHERE token_hash=? AND consumed_asset_id IS NULL", (asset_id, int(dedup), status, stage_hash))
                 if request_id is not None:
                     self._conn.execute(
                         "INSERT INTO image_requests(source_instance_id,agent_id,project_id,channel,operation,"
-                        "request_id,fingerprint,asset_id,deduplicated,initial_status)"
-                        " VALUES(?,?,?,?,'ingest_image',?,?,?,?,?)",
-                        (*scope, request_id, fingerprint, asset_id, int(dedup), status),
+                        "request_id,fingerprint,asset_id,deduplicated,initial_status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        (*scope, operation, request_id, fingerprint, asset_id, int(dedup), status),
                     )
                 self._conn.commit()
                 return {"asset_id": asset_id, "deduplicated": dedup, "status": status}

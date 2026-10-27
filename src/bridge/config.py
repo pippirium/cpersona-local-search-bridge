@@ -67,6 +67,8 @@ class BridgeConfig:
     # consequence of having a data dir (docs/03 §5, docs/08 §Managed files).
     managed_folder_id: int | None = None
     managed_root: Path | None = None
+    staging_root: Path | None = None
+    staging_input_root: Path | None = None
 
 
 def validate_config(
@@ -80,6 +82,8 @@ def validate_config(
     max_pixels: int = MAX_PIXELS,
     managed_folder_id: int | None = None,
     managed_root: str | Path | None = None,
+    staging_root: str | Path | None = None,
+    staging_input_root: str | Path | None = None,
 ) -> BridgeConfig:
     """Validate and materialize the configuration; raises ConfigError only."""
     if not is_literal_loopback(provider_base_url):
@@ -138,6 +142,29 @@ def validate_config(
             )
         m_root = mr
 
+    staging: Path | None = None
+    input_root: Path | None = None
+    if (staging_root is None) != (staging_input_root is None):
+        raise ConfigError("Staging requires both staging and input roots.")
+    if staging_root is not None:
+        staging = Path(staging_root).expanduser()
+        input_root = Path(staging_input_root).expanduser()
+        try:
+            if not input_root.is_dir():
+                raise ConfigError("Staging needs a private root and an existing input root.")
+            st = staging.resolve()
+            inp = input_root.resolve()
+            managed = m_root.resolve() if m_root else None
+            if (st == inp or st in inp.parents or inp in st.parents
+                    or st == resolved or st in resolved.parents or resolved in st.parents
+                    or (managed is not None and (st == managed or st in managed.parents or managed in st.parents))):
+                raise ConfigError("Staging must be separate from input, metadata and managed roots.")
+            staging.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if stat.S_IMODE(staging.stat().st_mode) & 0o077:
+                raise ConfigError("Staging needs a private root and an existing input root.")
+        except OSError:
+            raise ConfigError("Staging roots cannot be accessed.") from None
+
     for provider_dir in provider_data_dirs:
         try:
             pd = Path(provider_dir).expanduser().resolve()
@@ -156,6 +183,8 @@ def validate_config(
         max_pixels=max_pixels,
         managed_folder_id=managed_folder_id,
         managed_root=m_root,
+        staging_root=staging,
+        staging_input_root=input_root,
     )
 
 
@@ -178,6 +207,8 @@ def load_config(env: dict[str, str]) -> BridgeConfig:
         ),
         managed_folder_id=_managed_folder_id_from(env),
         managed_root=env.get("BRIDGE_MANAGED_ROOT", "") or None,
+        staging_root=env.get("BRIDGE_STAGING_ROOT", "") or None,
+        staging_input_root=env.get("BRIDGE_STAGING_INPUT_ROOT", "") or None,
     )
 def _managed_folder_id_from(env: dict[str, str]) -> int | None:
     raw = env.get("BRIDGE_MANAGED_FOLDER_ID", "")

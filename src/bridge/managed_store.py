@@ -33,7 +33,7 @@ def _open_root(root: Path) -> int:
         raise
 
 
-def _verify_file(dir_fd: int, name: str, data: bytes) -> None:
+def _verify_file(dir_fd: int, name: str, data: bytes) -> os.stat_result:
     fd = os.open(name, _FILE_FLAGS, dir_fd=dir_fd)
     try:
         info = os.fstat(fd)
@@ -54,11 +54,12 @@ def _verify_file(dir_fd: int, name: str, data: bytes) -> None:
                 != (after.st_dev, after.st_ino, after.st_mtime_ns, after.st_size)
                 or (entry.st_dev, entry.st_ino) != (info.st_dev, info.st_ino)):
             raise BridgeError("path_conflict")
+        return after
     finally:
         os.close(fd)
 
 
-def publish(root: Path, relative_path: str, data: bytes) -> None:
+def publish(root: Path, relative_path: str, data: bytes) -> os.stat_result:
     """Publish exact bytes atomically; existing targets are verified, never overwritten."""
     parts = relative_path.split("/")
     if len(parts) != 2 or not all(parts) or any(p in (".", "..") for p in parts):
@@ -96,7 +97,7 @@ def publish(root: Path, relative_path: str, data: bytes) -> None:
             os.unlink(temporary, dir_fd=shard_fd)
             temporary = None
         os.fsync(shard_fd)
-        _verify_file(shard_fd, name, data)
+        verified = _verify_file(shard_fd, name, data)
         reopened = _open_root(root)
         try:
             current = os.fstat(reopened)
@@ -106,6 +107,7 @@ def publish(root: Path, relative_path: str, data: bytes) -> None:
                 raise BridgeError("path_conflict")
         finally:
             os.close(reopened)
+        return verified
     except BridgeError:
         raise
     except OSError as exc:
@@ -195,3 +197,101 @@ def copy_is_missing(root: Path, relative_path: str) -> bool:
             os.close(shard_fd)
         if root_fd is not None:
             os.close(root_fd)
+
+
+def read_verified(root: Path, relative_path: str, expected_size: int, digest: str,
+                  max_bytes: int, expected_identity: tuple[int, int, int] | None = None) -> bytes:
+    """Read a private managed object through pinned descriptors and verify its bytes."""
+    root_fd = shard_fd = file_fd = None
+    parts = relative_path.split("/")
+    if (len(parts) != 2 or not all(parts) or any(p in (".", "..") for p in parts)
+            or not isinstance(expected_size, int) or not 0 < expected_size <= max_bytes):
+        raise BridgeError("invalid_request")
+    try:
+        root_fd = _open_root(root)
+        fcntl.flock(root_fd, fcntl.LOCK_EX)
+        root_info = os.fstat(root_fd)
+        shard_fd = os.open(parts[0], _DIR_FLAGS, dir_fd=root_fd)
+        shard_info = os.fstat(shard_fd)
+        if shard_info.st_uid != os.geteuid() or shard_info.st_mode & 0o077:
+            raise BridgeError("invalid_request")
+        file_fd = os.open(parts[1], _FILE_FLAGS, dir_fd=shard_fd)
+        before = os.fstat(file_fd)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size != expected_size
+                or (expected_identity is not None and
+                    (before.st_dev, before.st_ino, before.st_mtime_ns) != expected_identity)):
+            raise BridgeError("invalid_request")
+        data = bytearray()
+        while len(data) < expected_size:
+            chunk = os.read(file_fd, min(131072, expected_size - len(data)))
+            if not chunk:
+                raise BridgeError("invalid_request")
+            data.extend(chunk)
+        after = os.fstat(file_fd)
+        entry = os.stat(parts[1], dir_fd=shard_fd, follow_symlinks=False)
+        reopened = _open_root(root)
+        try:
+            current = os.fstat(reopened)
+            shard_entry = os.stat(parts[0], dir_fd=reopened, follow_symlinks=False)
+        finally:
+            os.close(reopened)
+        if (hashlib.sha256(data).hexdigest() != digest
+                or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+                != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                or after.st_nlink != 1 or entry.st_nlink != 1
+                or (entry.st_dev, entry.st_ino) != (before.st_dev, before.st_ino)
+                or (root_info.st_dev, root_info.st_ino) != (current.st_dev, current.st_ino)
+                or (shard_info.st_dev, shard_info.st_ino) != (shard_entry.st_dev, shard_entry.st_ino)):
+            raise BridgeError("invalid_request")
+        return bytes(data)
+    except BridgeError:
+        raise
+    except OSError:
+        raise BridgeError("invalid_request") from None
+    finally:
+        for item in (file_fd, shard_fd, root_fd):
+            if item is not None:
+                os.close(item)
+
+
+def remove_expired_copy(root: Path, relative_path: str, expected_identity: tuple[int, int, int]) -> bool:
+    """Delete only a tracked staging file, or succeed if already absent."""
+    parts = relative_path.split("/")
+    if len(parts) != 2 or not all(parts) or any(part in (".", "..") for part in parts):
+        return False
+    root_fd = shard_fd = fd = None
+    try:
+        root_fd = _open_root(root)
+        fcntl.flock(root_fd, fcntl.LOCK_EX)
+        root_info = os.fstat(root_fd)
+        shard_fd = os.open(parts[0], _DIR_FLAGS, dir_fd=root_fd)
+        shard_info = os.fstat(shard_fd)
+        if shard_info.st_uid != os.geteuid() or shard_info.st_mode & 0o077:
+            return False
+        fd = os.open(parts[1], _FILE_FLAGS, dir_fd=shard_fd)
+        info = os.fstat(fd)
+        entry = os.stat(parts[1], dir_fd=shard_fd, follow_symlinks=False)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or (info.st_dev, info.st_ino, info.st_mtime_ns) != expected_identity
+                or (entry.st_dev, entry.st_ino) != (info.st_dev, info.st_ino)):
+            return False
+        reopened = _open_root(root)
+        try:
+            current = os.fstat(reopened)
+            shard_entry = os.stat(parts[0], dir_fd=reopened, follow_symlinks=False)
+            if ((root_info.st_dev, root_info.st_ino) != (current.st_dev, current.st_ino)
+                    or (shard_info.st_dev, shard_info.st_ino) != (shard_entry.st_dev, shard_entry.st_ino)):
+                return False
+        finally:
+            os.close(reopened)
+        os.unlink(parts[1], dir_fd=shard_fd)
+        os.fsync(shard_fd)
+        return True
+    except FileNotFoundError:
+        return root_fd is not None
+    except (OSError, BridgeError):
+        return False
+    finally:
+        for item in (fd, shard_fd, root_fd):
+            if item is not None:
+                os.close(item)

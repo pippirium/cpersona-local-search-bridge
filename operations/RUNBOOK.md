@@ -201,3 +201,39 @@ connection failure) and reads at most the configured image byte cap for a manage
 A reported `ready` does not replace the explicit `get_asset` identity checks.
 Run `resolve_pending_assets` separately after indexing; a status read never
 binds pending IDs.
+
+
+## Local staging handoff for hosts without image-byte arguments
+
+Set `BRIDGE_STAGING_ROOT` to a private, dedicated temporary directory and
+`BRIDGE_STAGING_INPUT_ROOT` to an existing operator-allowed selection directory;
+keep both separate from the Bridge data and managed roots. Use the same Bridge
+environment and exact scope as the MCP server. In the trusted local terminal:
+
+```sh
+PYTHONPATH=src uv run python -m bridge.stage_image \
+  --agent-id example --relative-path selected-image.png --confirm
+```
+
+The selected relative path is only a local CLI argument, never an MCP argument.
+The command outputs an opaque `staging_id` and no source path. The user must
+explicitly choose the image; the command reads a stable, fully validated
+snapshot and never removes the original. Advisory locks cannot prevent a
+non-cooperating writer from changing the source after selection. Pass the ID to
+`import_staged_image` with the exact scope; use `get_ingest_status` and
+`resolve_pending_assets` separately. IDs expire after 15 minutes. Failed
+imports remain retryable until expiry; successful retries return the original
+result. Expiry alone does not delete the temporary file.
+
+To explicitly remove at most 100 expired ledger-owned staging files, run
+`PYTHONPATH=src uv run python -m bridge.stage_image --gc --confirm`. GC does
+not delete the original, foreign entries, managed copies or live tokens. A
+replaced staging file is reported as blocked for operator review. Crashes can
+leave an untracked temporary orphan; inspect the dedicated staging root before
+manual removal. Never enable staging by pointing it at a source directory.
+
+Schema v3 adds staging metadata and is migrated at startup. Before upgrading,
+make a consistent SQLite online backup and managed-root snapshot; retain a
+staging-root snapshot if pending handoffs need recovery. Older binaries reject
+a v3 DB; rollback requires restoring matching backups and abandoning tokens
+created after that backup.
