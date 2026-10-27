@@ -287,3 +287,79 @@ or index evidence is refused. Historical external assets without a content
 digest are not rebound through candidate selection; retain the old association
 or investigate and explicitly re-establish it rather than guessing.
 Use `unlink_asset` to remove an association without deleting the image.
+
+ 
+## IMG-09 — Safe image → index → memory association → later recall
+
+Full isolated E2E acceptance and matrix: [docs/20](../docs/20-img09-three-process-acceptance.md).
+Its new assertions have **not** been executed in this documentation change.
+The historical B-13 success in docs/16 is a separate earlier run.
+
+**Fresh test installation (not production):** use a new checkout with
+`uv sync`, review each pinned CPersona/local-search revision in docs/16,
+and install CPersona in a separate virtual environment from Bridge.
+Never reuse CPersona's live DB, an existing local-search index, a client's
+existing MCP registration, or a source folder of user images. The test itself
+creates independent temp Bridge DB, CPersona DB, provider DB/index,
+watched-folder, managed-root, staging-root and allowed-selection folder. It
+starts/stops only children it created. Its local-search process uses the
+explicit fake embedder; real search accuracy remains unmeasured here.
+
+Before a real-world workflow, the trusted operator registers and enables
+watching for an empty managed folder, configures the corresponding
+`BRIDGE_MANAGED_FOLDER_ID` and `BRIDGE_MANAGED_ROOT`, and calls
+`bridge_health`. A host that can transmit bounded Base64 invokes
+`ingest_image` with a deliberate user-selected image. A host that cannot
+transmit image bytes must instead use the local `bridge.stage_image` helper
+under an explicitly configured input root, then invoke `import_staged_image`
+with the short-lived opaque staging ID. Do not assume a displayed attachment
+has been forwarded, and never send arbitrary paths to the MCP service.
+
+After the ingest tool returns `pending`, wait for the provider's watched
+folder to index the managed copy; call `resolve_pending_assets` explicitly
+and then `get_ingest_status` to confirm `ready`. The link itself may
+already be created in `pending` once the trusted host has obtained the real
+`mem:N` or `ep:N` from CPersona and the user explicitly approves linking.
+Use `link_registered_asset` and then `list_memory_assets`. CPersona's
+normal `recall` and `reconstruct` do **not** load image bytes. Only the
+explicit `get_asset` tool may return a media block. A candidate discovered
+through `discover_assets` is never auto-linked.
+
+Example (schematic; use a real CPersona reference and actual returned ID):
+
+```json
+{"tool":"link_registered_asset","arguments":{"agent_id":"example","memory_ref":"mem:42","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3"}}
+```
+```json
+{"tool":"list_memory_assets","arguments":{"agent_id":"example","memory_ref":"mem:42"}}
+```
+```json
+{"tool":"get_ingest_status","arguments":{"agent_id":"example","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3"}}
+```
+
+On cancellation, never call `link_registered_asset`; unlinked candidates
+stay outside memory results. If indexing is slow, preserve `pending` and
+retry the explicit resolver; do not fabricate ready or change provider IDs.
+If the provider is unavailable, check `bridge_health`, retry safe HTTP reads
+only under their documented bounds, and do not convert provider errors into
+empty search success. On changed content, reindex, rowid reuse or missing
+bytes, fail closed and investigate the specific asset via status/audit rather
+than substituting another image. If a token expires, require a new deliberate
+operator selection; do not bypass expiration. The owner remains allowed to
+review provenance after unlink, while another link-only scope loses access
+when its last link is removed.
+
+For schema upgrade/restore use the **IMG-08 v4** section once #62 is merged:
+stop writers, take a consistent online SQLite backup and managed/staging root
+snapshots, and restore the matching set on failure. After rollback, explicitly
+recreate the associations made after the snapshot with user approval rather
+than inventing missing CPersona memory references. No automatic destructive
+cleanup is performed. Keep temp child process logs private; do not commit
+stderr, memory content, Base64, filename, private path or tokens.
+
+Verification commands (the live test requires dedicated executables):
+```sh
+uv run pytest -q
+uv run pytest tests/security -q
+BRIDGE_THREE_PROCESS_CPERSONA_PYTHON=<test-python> BRIDGE_THREE_PROCESS_LOCAL_SEARCH=<test-provider> uv run pytest tests/integration/test_three_process.py -q
+```
