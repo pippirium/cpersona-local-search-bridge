@@ -146,6 +146,21 @@ class LocalSearchClient:
         self._check(response)
         return self._json(response)
 
+    def search_page(self, search_id: str, cursor: str, *, folder_id: int,
+                    page_size: int = 20) -> dict:
+        # Continue the provider's frozen search snapshot; never resend query text.
+        try:
+            response = self._client.post("/api/search", json={"search_id": search_id,
+                "cursor": cursor, "folder_id": folder_id, "tab": "image", "page_size": page_size})
+        except httpx.TimeoutException as exc:
+            raise _transport("timeout_read") from exc
+        except httpx.HTTPError as exc:
+            raise _transport("connection") from exc
+        if response.status_code == 400:
+            raise BridgeError("invalid_request", provider_code="bad_request")
+        self._check(response)
+        return self._json(response)
+
     def search_media(self, data: bytes, *, filename: str,
                      folder_id: int | None = None,
                      page_size: int = 20) -> dict:

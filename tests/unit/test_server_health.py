@@ -147,7 +147,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"bridge_health", "link_asset", "unlink_asset",
                     "search_assets", "list_memory_assets", "get_asset",
-                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image"}
+                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image", "discover_assets"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
@@ -268,4 +268,26 @@ async def test_staged_import_wire_contract(tmp_path):
         validator.validate(denied)
         assert denied["error"]["code"] == "invalid_request" and denied["asset_id"] is None
     assert (cfg.staging_input_root / "source.png").read_bytes() == original
+    repo.close()
+
+
+@pytest.mark.anyio
+async def test_discovery_wire_is_schema_valid_and_never_contains_image_bytes(tmp_path):
+    import json
+    from pathlib import Path
+    from jsonschema import Draft202012Validator
+    from tests.unit.test_tools_discover import setup
+    cfg, provider, repo, state = setup(tmp_path)
+    server = create_server(BridgeContext(config=cfg, provider=provider, db=repo, discovery=state))
+    spec = json.loads((Path(__file__).resolve().parents[2] /
+                       "fixtures/contracts/image-input/requests.json").read_text())
+    validator = Draft202012Validator(spec["responses"]["discover_assets"])
+    async with connected_client(server) as session:
+        good = await session.call_tool("discover_assets", {"agent_id": "a", "query": "synthetic", "folder_id": 1})
+        validator.validate(good.structured_content)
+        assert good.structured_content["candidates"]
+        assert all(content.type != "image" for content in good.content)
+        denied = await session.call_tool("discover_assets", {"agent_id": "a", "query": "synthetic", "folder_id": 999})
+        validator.validate(denied.structured_content)
+        assert denied.structured_content["error"]["code"] == "asset_not_found"
     repo.close()

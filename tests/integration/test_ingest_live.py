@@ -91,6 +91,18 @@ def test_ingest_then_live_watcher_resolves(tmp_path):
                     else:
                         pytest.fail("isolated staged image did not resolve")
                     assert source.read_bytes() == second.getvalue()
+                    from bridge.tools_discover import DiscoveryState, discover_assets, validate_candidate
+                    discovery = DiscoveryState()
+                    found = discover_assets(provider=provider, repo=repo, config=cfg, state=discovery,
+                                            agent_id="synthetic", query="赤", folder_id=folder_id)
+                    assert found.ok and found.candidates
+                    candidate = found.candidates[0]
+                    evidence = validate_candidate(provider=provider, repo=repo, config=cfg,
+                        state=discovery, token=candidate.candidate_token, scope=("", "synthetic", "", ""))
+                    assert evidence["folder_id"] == folder_id
+                    foreign = discover_assets(provider=provider, repo=repo, config=cfg, state=discovery,
+                                              agent_id="other", query="赤", folder_id=folder_id)
+                    assert foreign.ok and foreign.candidates == []
                 finally:
                     provider.close()
                     repo.close()

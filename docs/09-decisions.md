@@ -102,3 +102,15 @@ Source reads use no-follow descriptors, an advisory shared lock and unchanged
 file identity checks. A non-cooperating process can still modify an original
 after selection; the copied image is a validated snapshot, not a claim of
 exclusive control over the source.
+
+## D-34 — Allowlisted discovery with bounded hash evidence (IMG-05, #59)
+
+Discovery queries each operator-allowed folder with the provider-side folder
+filter, and retains opaque scope-bound handles only in process memory. To detect
+same-size/same-time replacement at later selection, this explicitly invoked
+operation reads and validates at most 20 local candidate files per call and
+retains hashes, never image bytes or original paths in the response or logs.
+A selection re-reads and compares its hash and live generation. Cursors and
+tokens last at most five minutes and can be evicted on capacity or restart.
+The MCP SDK emits unused fields as null and empty arrays; the response schema
+permits those on failure without permitting a partial candidate result.

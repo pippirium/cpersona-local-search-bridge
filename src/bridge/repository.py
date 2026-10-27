@@ -559,6 +559,31 @@ class Repository:
             except sqlite3.IntegrityError:
                 raise StorageError("file already bound to another asset") from None
 
+    def discovery_visible(self, *, scope: tuple[str, str, str, str], provider_instance_id: str,
+                          file_id: int, folder_id: int, relative_path: str) -> bool:
+        """Unknown files are discoverable; known files need membership in this scope."""
+        with self.lock:
+            scope = normalize_scope(*scope)
+            rows = self._conn.execute(
+                "SELECT DISTINCT a.asset_id FROM assets a JOIN provider_locators l ON l.asset_id=a.asset_id"
+                " WHERE l.provider_instance_id=? AND (l.provider_file_id=? OR"
+                " (l.provider_folder_id=? AND a.relative_managed_path=?))",
+                (provider_instance_id, file_id, folder_id, relative_path),
+            ).fetchall()
+            known = visible = False
+            for (asset_id,) in rows:
+                owner = self._conn.execute("SELECT source_instance_id,agent_id,project_id,channel"
+                    " FROM asset_owners WHERE asset_id=?", (asset_id,)).fetchone()
+                if owner:
+                    known = True
+                    visible = visible or tuple(owner) == scope
+                links = self._conn.execute("SELECT source_instance_id,agent_id,project_id,channel"
+                    " FROM asset_links WHERE asset_id=?", (asset_id,)).fetchall()
+                if links:
+                    known = True
+                    visible = visible or any(tuple(link) == scope for link in links)
+            return visible or not known
+
     def owned_assets_for_managed_identity(self, *, provider_instance_id: str,
                                           folder_id: int, relative_path: str) -> list[str]:
         """Find owned managed copies even before their pending locators bind."""

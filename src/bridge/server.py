@@ -7,7 +7,7 @@ stdio per docs/12 §1.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 
 from mcp.server.mcpserver import MCPServer
@@ -22,6 +22,7 @@ from bridge.tools_import import RegisterAssetResult, register_asset as _register
 from bridge.tools_ingest import IngestResult, ingest_image as _ingest_impl
 from bridge.tools_status import IngestStatusResult, get_ingest_status as _status_impl
 from bridge.tools_staging import import_staged_image as _staging_impl
+from bridge.tools_discover import DiscoveryResult, DiscoveryState, discover_assets as _discover_impl
 from bridge.audit import AuditReport, audit as _audit_impl
 from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
@@ -40,6 +41,7 @@ class BridgeContext:
     config: BridgeConfig
     provider: ProviderPort
     db: Repository | None = None  # repository handle (B-05)
+    discovery: DiscoveryState = field(default_factory=DiscoveryState)
 
 
 @dataclass
@@ -209,6 +211,16 @@ def create_server(ctx: BridgeContext) -> MCPServer:
         return _staging_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config, agent_id=agent_id,
                              staging_id=staging_id, project_id=project_id, channel=channel,
                              source_instance_id=source_instance_id, client_request_id=client_request_id)
+
+    @server.tool(name="discover_assets", description="Discover image candidates only in operator-allowed folders; no automatic links or image bytes.")
+    def _discover_assets(agent_id: str, query: str, project_id: str = "", channel: str = "",
+                         source_instance_id: str = "", folder_id: int | None = None,
+                         limit: int = 10, cursor: str | None = None) -> DiscoveryResult:
+        if ctx.db is None:
+            return DiscoveryResult(ok=False, error=error_result("storage_error")["error"])
+        return _discover_impl(provider=ctx.provider, repo=ctx.db, config=ctx.config, state=ctx.discovery,
+            agent_id=agent_id, query=query, project_id=project_id, channel=channel,
+            source_instance_id=source_instance_id, folder_id=folder_id, limit=limit, cursor=cursor)
 
     # ---- link tools (B-07) ----------------------------------------------------
 

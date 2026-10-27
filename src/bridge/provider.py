@@ -44,6 +44,9 @@ class ProviderPort(Protocol):
         cursor: str | None = None,
     ) -> dict: ...
 
+    def search_page(self, search_id: str, cursor: str, *, folder_id: int,
+                    page_size: int) -> dict: ...
+
     def folders(self) -> list[dict]: ...
 
     def folder_entries(self, folder_id: int, *, limit: int) -> FolderInventory: ...
@@ -215,6 +218,12 @@ class FakeProvider:
             return FolderInventory(out, len(recent), len(recent) >= fetch)
 
         return _retry_get(lambda: {"v": op()}, retryable=True)["v"]
+
+    def search_page(self, search_id: str, cursor: str, *, folder_id: int,
+                    page_size: int) -> dict:
+        self.calls.append(("search_page", (search_id, cursor), {"folder_id": folder_id, "page_size": page_size}))
+        self._fail("search")
+        raise BridgeError("invalid_request", provider_code="search_expired")
 
     def search(
         self,
