@@ -2,7 +2,7 @@
 
 **CPersonaのテキスト記憶とlocal-searchの画像・ファイル検索をつなぐ、ローカル専用のMCPアダプター。**
 
-> **Status: 開発版（0.0.0）。stdio MCP・15ツール実装済み、未リリース。**
+> **Status: 開発版（0.0.0）。stdio MCP・17ツール実装済み、未リリース。**
 >
 > M0〜M2の実装とオフライン検証、評価CLI・運用手順があります。実モデルの合成色画像probeは[docs/17](docs/17-real-color-probe.md)に記録しました。一般的な品質評価とfresh Mac導入は未検証です。実CPersonaを含む3プロセス試験は[docs/16](docs/16-three-process-acceptance.md)で合成画像・fake embedderによる成功を記録しています。安全性修正 #39〜#43 と検証条件は[決定記録](docs/09-decisions.md)を参照してください。実装済みはリリース承認・安全性の無条件保証を意味しません。
 
@@ -48,6 +48,8 @@ flowchart LR
 | 結合検査・LLM不要の評価CLI | M3 | 実装済み・実provider監査はfake embedder。3プロセスはdocs/16で検証、実モデルの合成色画像probeはdocs/17。一般品質は未検証 |
 
 公開リポジトリのコードに秘密鍵・個人の会話ログ・画像・ローカル絶対パスを含めないでください。既存のlocal-searchは個人用途のプロジェクトであり、本リポジトリはその内部実装を複製せず**既存HTTP API**経由で接続します。
+
+未索引画像の明示的な入力・発見・記憶リンクと、出典メタデータの取得・更新もサポートします。メタデータはユーザー付与ラベルであり、画像の同一性や承認の証明ではありません（[RUNBOOK](operations/RUNBOOK.md)）。
 
 ## 主要な設計判断
 
@@ -117,7 +119,7 @@ MCPクライアント登録例（stdio）と環境変数表は **[operations/RUN
 
 ## 現在の状態と制約
 
-MCPサーバー（stdio・15ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は303 passed / 5 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
+MCPサーバー（stdio・17ツール）・管理コピー・状態機械・監査・eval CLI・運用runbookが実装済みで、オフラインスイートは `uv run pytest` で実行できます。2026-10-26の安全性修正後の実行結果は303 passed / 5 skipped（実provider検査はopt-in）です。未測定として正直に記録しているもの:
 
 - **一般的な実画像に対する検索品質・モデル間比較**（docs/17は実EmbeddingGemmaで合成色画像12クエリを測定した限定probe。数値の転記禁止はdocs/07・[eval/README.md](eval/README.md)）
 - **工場出荷状態のMacでのインストール手順実演**（RUNBOOK §1に[fresh-Mac unverified]表記）
