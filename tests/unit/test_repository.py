@@ -284,7 +284,7 @@ def test_health_reports_real_schema_version(tmp_path):
     conn = open_repository(tmp_path)
     ctx = BridgeContext(config=cfg, provider=FakeProvider(), db=Repository(conn))
     h = bridge_health(ctx)
-    assert h.storage.schema_version == 3
+    assert h.storage.schema_version == 4
     # a downgraded-looking DB is reported verbatim, not clamped
     conn.execute("PRAGMA user_version = 0")
     assert bridge_health(ctx).storage.schema_version == 0
