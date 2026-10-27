@@ -593,11 +593,14 @@ class Repository:
         """Reject a known conflicting retry before publishing a managed copy."""
         with self.lock:
             scope = normalize_scope(*scope)
-            prior = self._conn.execute(
-                "SELECT fingerprint FROM image_requests WHERE source_instance_id=? AND agent_id=?"
-                " AND project_id=? AND channel=? AND operation=? AND request_id=?",
-                (*scope, "import_staged_image" if stage_hash else "ingest_image", request_id),
-            ).fetchone()
+            try:
+                prior = self._conn.execute(
+                    "SELECT fingerprint FROM image_requests WHERE source_instance_id=? AND agent_id=?"
+                    " AND project_id=? AND channel=? AND operation=? AND request_id=?",
+                    (*scope, "import_staged_image" if stage_hash else "ingest_image", request_id),
+                ).fetchone()
+            except sqlite3.Error:
+                raise StorageError("request lookup failed") from None
             if prior and prior[0] != image_request_fingerprint(digest, provider_instance_id, folder_id, stage_hash):
                 raise RequestConflict("request id conflict")
 

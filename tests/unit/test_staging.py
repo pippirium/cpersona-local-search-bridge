@@ -259,3 +259,11 @@ def test_retry_key_cannot_be_reused_for_a_different_stage_token(tmp_path):
     assert consume(cfg, provider, repo, second, key="same").error["code"] == "invalid_request"
     assert repo.staged_image(scope=SCOPE, token_hash=token_hash(second))["asset_id"] is None
     repo.close()
+
+
+def test_closed_database_returns_sanitized_error(tmp_path):
+    cfg, provider, repo, _ = setup(tmp_path)
+    token = stage(cfg, repo)
+    repo.close()
+    result = consume(cfg, provider, repo, token, key="retry")
+    assert result.error["code"] == "storage_error"
