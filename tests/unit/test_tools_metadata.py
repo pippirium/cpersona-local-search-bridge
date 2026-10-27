@@ -176,20 +176,28 @@ def test_caller_cannot_supply_path_or_unknown_field_via_mcp(tmp_path):
                 "asset_id": asset, "metadata_patch": {"source_kind": "local_selection"},
             })).structured_content
             assert good["ok"]
+            import json
+            from jsonschema import Draft202012Validator
+            spec = json.loads((Path(__file__).resolve().parents[2] /
+                "fixtures/contracts/image-input/requests.json").read_text())
+            Draft202012Validator(spec["responses"]["set_asset_metadata"]).validate(good)
             read = (await client.call_tool("get_asset_metadata", {
                 "agent_id": "alpha", "project_id": "project", "channel": "chat",
                 "asset_id": asset,
             })).structured_content
             assert read["metadata"] == {"source_kind": "local_selection"}
+            Draft202012Validator(spec["responses"]["get_asset_metadata"]).validate(read)
             denied = (await client.call_tool("get_asset_metadata", {
                 "agent_id": "other", "asset_id": asset,
             })).structured_content
             assert denied["error"]["code"] == "asset_not_found"
+            Draft202012Validator(spec["responses"]["get_asset_metadata"]).validate(denied)
             invalid = (await client.call_tool("set_asset_metadata", {
                 "agent_id": "alpha", "project_id": "project", "channel": "chat",
                 "asset_id": asset, "metadata_patch": {"url": "https://example.invalid"},
             })).structured_content
             assert invalid["error"]["code"] == "invalid_request"
+            Draft202012Validator(spec["responses"]["set_asset_metadata"]).validate(invalid)
         repo.close()
 
     anyio.run(check)
