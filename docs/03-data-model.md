@@ -89,3 +89,7 @@ Include the entire Bridge SQLite database via sqlite3 backup API; if managed cop
 - Schema version stored in PRAGMA user_version.
 - Every migration has forward-only tests, fail-closed behavior on newer schema, and documented backup before upgrade.
 - Do not change CPersona's production schema, or import a CPersona DB directly.
+
+## Planned unlinked-asset ownership (IMG-01)
+
+[docs/19](19-image-input-contract.md) specifies a versioned owner relation for new unlinked managed assets, scope-preserving deduplication, and backup/restore and locator migration requirements. The existing v1 schema stays unchanged until the runtime implementation migrates it. Existing linked-only visibility is not widened.

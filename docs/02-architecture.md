@@ -72,3 +72,7 @@ local-search indexes the operator's broader library. Bridge must never hand raw 
 - A separate Bridge data directory is explicit, private (0700 on POSIX) and distinct from both provider DB directories.
 - A fake HTTP provider and temporary bridge DB enable tests without EmbeddingGemma model downloads.
 - No remote access is supported until user approval and a separate authenticated transport design.
+
+## IMG-01 proposed ownership boundary
+
+The trusted host obtains user approval and CPersona references; Bridge manages bounded input and scope-scoped associations; local-search indexes the managed folder and supplies search. The Bridge does not authenticate caller-provided scope, update provider databases, or implicitly fetch media during recall. See [docs/19](19-image-input-contract.md).

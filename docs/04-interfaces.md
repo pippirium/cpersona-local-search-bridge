@@ -77,6 +77,10 @@ B-01 guard note (docs/10-contract-audit.md): the provider's Host/Origin guard ac
 | path_conflict | Managed content path conflict |
 | source_unreadable | Explicit import source could not be read |
 
+## Proposed image-input contract (IMG-01)
+
+The prospective tools, scope, error semantics, migration design and host capability rules are specified in [docs/19](19-image-input-contract.md). These are design contracts and are not yet registered MCP tools. Machine-readable request shapes live in `fixtures/contracts/image-input/requests.json`; semantic safety rules also apply. Existing nine tools above retain their behavior.
+
 ## Extension points and policy
 - A future CPersona-native integration may consume stable asset refs; it must preserve existing text-only recall default and be done in the user's fork under a separate approved PR.
 - A future provider could replace local-search behind a typed AssetSearchProvider protocol. No generalized provider framework is necessary for M1.

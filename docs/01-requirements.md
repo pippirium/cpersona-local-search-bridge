@@ -51,3 +51,7 @@ RAG answers, OCR, automatic image captioning, audio ingestion, remote hosting, t
 
 ## Acceptance gates
 M0: contracts and unresolved choices written. M1: fake provider + temporary DB demonstrate association, scoped search, explicit fetch and non-destructive unlink. M2: restart/index-mismatch/missing-file/recovery and optional import tests pass. M3: offline evaluation results, manual smoke test, backup/restore and privacy audit documented. No stage is accepted based on README claims alone.
+
+## IMG-01 image input extension
+
+Unindexed user-selected images require an explicit bounded input or a local operator-controlled staging handoff. The design and access boundaries for the proposed tools are in [docs/19](19-image-input-contract.md); they do not imply runtime implementation or alter the existing model configuration.

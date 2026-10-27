@@ -1,0 +1,1248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Design only; semantic byte, scope, identity, consent and safety gates are specified in docs/19.",
+  "tools": {
+    "ingest_image": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "image_base64": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 10666668,
+          "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+        },
+        "client_request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+      },
+      "required": [
+        "agent_id",
+        "image_base64"
+      ],
+      "additionalProperties": false
+    },
+    "import_staged_image": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "staging_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "client_request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+      },
+      "required": [
+        "agent_id",
+        "staging_id"
+      ],
+      "additionalProperties": false
+    },
+    "get_ingest_status": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      },
+      "required": [
+        "agent_id",
+        "asset_id"
+      ],
+      "additionalProperties": false
+    },
+    "discover_assets": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1
+        },
+        "folder_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "agent_id",
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "search_assets_by_image": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "query_asset_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "image_base64": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 10666668,
+          "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+        },
+        "folder_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        }
+      },
+      "required": [
+        "agent_id"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "query_asset_id"
+          ],
+          "not": {
+            "required": [
+              "image_base64"
+            ]
+          }
+        },
+        {
+          "required": [
+            "image_base64"
+          ],
+          "not": {
+            "required": [
+              "query_asset_id"
+            ]
+          }
+        }
+      ]
+    },
+    "link_registered_asset": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "memory_ref": {
+          "type": "string",
+          "pattern": "^(mem|ep):[1-9][0-9]{0,17}$"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "candidate_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "client_request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+      },
+      "required": [
+        "agent_id",
+        "memory_ref"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "asset_id"
+          ],
+          "not": {
+            "required": [
+              "candidate_token"
+            ]
+          }
+        },
+        {
+          "required": [
+            "candidate_token"
+          ],
+          "not": {
+            "required": [
+              "asset_id"
+            ]
+          }
+        }
+      ]
+    },
+    "set_asset_metadata": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "metadata_patch": {
+          "type": "object",
+          "properties": {
+            "user_caption": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 1000
+            },
+            "caption_origin": {
+              "enum": [
+                "user",
+                "external_source",
+                null
+              ]
+            },
+            "source_kind": {
+              "enum": [
+                "chat_attachment",
+                "local_selection",
+                "managed_import",
+                "external_source",
+                null
+              ]
+            },
+            "captured_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "recorded_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "source_message_ref": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 128
+            },
+            "consent_record": {
+              "enum": [
+                "explicit_user",
+                "operator_confirmed",
+                null
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        }
+      },
+      "required": [
+        "agent_id",
+        "asset_id",
+        "metadata_patch"
+      ],
+      "additionalProperties": false
+    },
+    "get_asset_metadata": {
+      "type": "object",
+      "properties": {
+        "source_instance_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      },
+      "required": [
+        "agent_id",
+        "asset_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "responses": {
+    "ingest_image": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "asset_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "ingest_status": {
+              "enum": [
+                "pending",
+                "ready",
+                "stale",
+                "missing",
+                "incompatible"
+              ]
+            },
+            "deduplicated": {
+              "type": "boolean"
+            },
+            "media_type": {
+              "enum": [
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/gif"
+              ]
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8000000
+            }
+          },
+          "required": [
+            "ok",
+            "asset_id",
+            "ingest_status",
+            "deduplicated",
+            "media_type",
+            "size_bytes"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "import_staged_image": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "asset_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "ingest_status": {
+              "enum": [
+                "pending",
+                "ready",
+                "stale",
+                "missing",
+                "incompatible"
+              ]
+            },
+            "deduplicated": {
+              "type": "boolean"
+            },
+            "media_type": {
+              "enum": [
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/gif"
+              ]
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8000000
+            }
+          },
+          "required": [
+            "ok",
+            "asset_id",
+            "ingest_status",
+            "deduplicated",
+            "media_type",
+            "size_bytes"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "get_ingest_status": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "asset_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "ready",
+                "stale",
+                "missing",
+                "incompatible"
+              ]
+            },
+            "indexed": {
+              "type": "boolean"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "reason_code": {
+              "enum": [
+                "waiting_for_index",
+                "page_full",
+                "folder_not_watched",
+                "provider_unavailable",
+                "index_incompatible",
+                "identity_mismatch",
+                "file_missing",
+                "unknown"
+              ]
+            },
+            "checked_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "ok",
+            "asset_id",
+            "status",
+            "indexed",
+            "retryable"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "discover_assets": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "candidate_token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "kind": {
+                    "const": "image"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "status": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "candidate_token",
+                  "kind",
+                  "label",
+                  "score",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            "search_coverage": {
+              "enum": [
+                "exact",
+                "partial"
+              ]
+            },
+            "next_cursor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "ok",
+            "candidates",
+            "search_coverage",
+            "warnings"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "search_assets_by_image": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "asset_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  },
+                  "provider_file_id": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "media_kind": {
+                    "const": "image"
+                  },
+                  "media_type": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "size_bytes": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "last_seen_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "locator_status": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "pending",
+                          "ready",
+                          "stale",
+                          "missing",
+                          "incompatible"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "score": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "memory_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^(mem|ep):[1-9][0-9]{0,17}$"
+                    }
+                  }
+                },
+                "required": [
+                  "asset_id",
+                  "provider_file_id",
+                  "media_kind",
+                  "media_type",
+                  "size_bytes",
+                  "last_seen_name",
+                  "locator_status",
+                  "score",
+                  "memory_refs"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            "search_coverage": {
+              "enum": [
+                "exact",
+                "partial"
+              ]
+            },
+            "provider_warning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "ok",
+            "results",
+            "search_coverage"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "link_registered_asset": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "asset_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "memory_ref": {
+              "type": "string",
+              "pattern": "^(mem|ep):[1-9][0-9]{0,17}$"
+            },
+            "link_status": {
+              "enum": [
+                "pending",
+                "ready",
+                "stale",
+                "missing",
+                "incompatible"
+              ]
+            },
+            "already_linked": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "ok",
+            "asset_id",
+            "memory_ref",
+            "link_status",
+            "already_linked"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "set_asset_metadata": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "asset_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "user_caption": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 1000
+                },
+                "caption_origin": {
+                  "enum": [
+                    "user",
+                    "external_source",
+                    null
+                  ]
+                },
+                "source_kind": {
+                  "enum": [
+                    "chat_attachment",
+                    "local_selection",
+                    "managed_import",
+                    "external_source",
+                    null
+                  ]
+                },
+                "captured_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "recorded_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "source_message_ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 128
+                },
+                "consent_record": {
+                  "enum": [
+                    "explicit_user",
+                    "operator_confirmed",
+                    null
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "asset_id",
+            "metadata"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "get_asset_metadata": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "asset_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "user_caption": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 1000
+                },
+                "caption_origin": {
+                  "enum": [
+                    "user",
+                    "external_source",
+                    null
+                  ]
+                },
+                "source_kind": {
+                  "enum": [
+                    "chat_attachment",
+                    "local_selection",
+                    "managed_import",
+                    "external_source",
+                    null
+                  ]
+                },
+                "captured_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "recorded_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "source_message_ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 128
+                },
+                "consent_record": {
+                  "enum": [
+                    "explicit_user",
+                    "operator_confirmed",
+                    null
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "asset_id",
+            "metadata"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "enum": [
+                    "invalid_request",
+                    "asset_not_found",
+                    "asset_unavailable",
+                    "unsupported_media",
+                    "media_too_large",
+                    "dependency_unavailable",
+                    "index_incompatible",
+                    "storage_full",
+                    "storage_error",
+                    "path_conflict",
+                    "source_unreadable"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}
