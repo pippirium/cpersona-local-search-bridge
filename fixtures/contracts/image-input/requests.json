@@ -772,15 +772,25 @@
               ]
             },
             "next_cursor": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 512
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "warnings": {
               "type": "array",
               "items": {
                 "type": "string"
               }
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -823,6 +833,20 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "candidates": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "warnings": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "next_cursor": {
+              "type": "null"
+            },
+            "search_coverage": {
+              "type": "null"
             }
           },
           "required": [

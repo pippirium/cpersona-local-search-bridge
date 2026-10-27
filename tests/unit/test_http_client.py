@@ -437,3 +437,15 @@ def test_search_media_ok_envelope():
             assert data["items"] == [{"file_id": 3}]
         finally:
             client.close()
+
+
+def test_search_page_uses_search_id_and_folder_filter(tmp_data):
+    seen = {}
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json=load("search-image-200.json"))
+    client = make_client(handler, tmp_path=tmp_data)
+    client.search_page("synthetic-search", "next-page", folder_id=7, page_size=20)
+    assert seen == {"search_id": "synthetic-search", "cursor": "next-page", "folder_id": 7,
+                    "tab": "image", "page_size": 20}
+    assert "q" not in seen

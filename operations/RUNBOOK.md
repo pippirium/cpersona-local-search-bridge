@@ -237,3 +237,23 @@ make a consistent SQLite online backup and managed-root snapshot; retain a
 staging-root snapshot if pending handoffs need recovery. Older binaries reject
 a v3 DB; rollback requires restoring matching backups and abandoning tokens
 created after that backup.
+
+
+## Allowlisted discovery
+
+Set `BRIDGE_DISCOVERY_FOLDER_IDS` to a comma-separated set of up to 16 positive
+local-search folder IDs. The explicitly configured managed folder is also
+allowed and counts toward the 16. Unset means no general folders are exposed.
+`discover_assets` searches only those folders, using a separate provider-side
+filter per folder. It returns labels and short-lived selection tokens, never
+image bytes or other-scope asset IDs. An unapproved folder returns the same
+not-found result without a provider search.
+
+Discovery is an explicit potentially expensive operation: at most five search
+pages and 20 identity-verification reads per call, each up to the configured
+image byte cap. An empty partial page can mean more folders need scanning;
+repeat the identical query and folder with `next_cursor`. Cursors are
+single-use and, like selection tokens, live in the Bridge process for at most
+five minutes and can expire earlier on restart or capacity pressure. `partial`
+also reports provider result caps, without exposing hit counts. Selection must
+still be explicitly approved and revalidated; discovery never links a memory.

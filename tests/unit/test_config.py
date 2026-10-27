@@ -107,3 +107,12 @@ def test_config_error_messages_carry_no_paths(tmp_path):
         )
     assert str(prov) not in str(ei.value)
     assert str(tmp_path) not in str(ei.value)
+
+
+def test_discovery_allowlist_validation(tmp_path):
+    from bridge.config import ConfigError, validate_config
+    base = dict(data_dir=tmp_path / "discovery", provider_base_url="http://127.0.0.1:18765")
+    assert validate_config(**base, discovery_folder_ids=(1, 7)).discovery_folder_ids == (1, 7)
+    for ids in ((1, 1), (0,), tuple(range(1, 18)), (True,)):
+        with pytest.raises(ConfigError):
+            validate_config(**base, discovery_folder_ids=ids)

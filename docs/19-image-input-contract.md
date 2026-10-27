@@ -101,7 +101,13 @@ generation and file identity evidence. It grants no authentication. Selection
 rechecks live evidence and fails closed on changed/missing/ambiguous identity;
 a token is not a permanent locator. Cursors are opaque, short-lived and bound
 to exact scope, query, folder allowlist and provider generation and expire after five minutes; invalid or
-expired cursors are rejected. Fetch at most five provider pages per request;
+expired cursors are rejected. Fetch at most five provider pages and verify at most 20 candidate files per
+request; verification may read up to the configured image byte cap per file
+from the local provider solely to retain a content hash. Image bytes are not
+returned or logged. Handles are process-local, can be evicted under bounded
+capacity or on restart, and are valid at most five minutes. A successful cursor
+continuation consumes the old cursor; repeat the same query and folder on each
+continuation. Fetch at most five provider pages per request;
 `partial` means a bound or result limit prevented exhaustion, never a promise
 about semantic recall. Merge per-folder results by score with stable tie
 breaking, and do not expose provider-wide counts. No automatic link is made.

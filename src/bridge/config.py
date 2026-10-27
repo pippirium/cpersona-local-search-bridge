@@ -69,6 +69,7 @@ class BridgeConfig:
     managed_root: Path | None = None
     staging_root: Path | None = None
     staging_input_root: Path | None = None
+    discovery_folder_ids: tuple[int, ...] = ()
 
 
 def validate_config(
@@ -84,8 +85,15 @@ def validate_config(
     managed_root: str | Path | None = None,
     staging_root: str | Path | None = None,
     staging_input_root: str | Path | None = None,
+    discovery_folder_ids: tuple[int, ...] = (),
 ) -> BridgeConfig:
     """Validate and materialize the configuration; raises ConfigError only."""
+    if (not isinstance(discovery_folder_ids, tuple) or len(discovery_folder_ids) > 16
+            or any(type(value) is not int or value <= 0 for value in discovery_folder_ids)
+            or len(set(discovery_folder_ids)) != len(discovery_folder_ids)
+            or (managed_folder_id is not None and managed_folder_id not in discovery_folder_ids
+                and len(discovery_folder_ids) >= 16)):
+        raise ConfigError("Discovery folder IDs must be unique positive integers, at most 16 including managed folder.")
     if not is_literal_loopback(provider_base_url):
         raise ConfigError("The provider URL must be a literal http://127.0.0.1:<port> loopback address.")
     if source_instance_id and not _SOURCE_INSTANCE_RE.match(source_instance_id):
@@ -185,6 +193,7 @@ def validate_config(
         managed_root=m_root,
         staging_root=staging,
         staging_input_root=input_root,
+        discovery_folder_ids=discovery_folder_ids,
     )
 
 
@@ -209,6 +218,7 @@ def load_config(env: dict[str, str]) -> BridgeConfig:
         managed_root=env.get("BRIDGE_MANAGED_ROOT", "") or None,
         staging_root=env.get("BRIDGE_STAGING_ROOT", "") or None,
         staging_input_root=env.get("BRIDGE_STAGING_INPUT_ROOT", "") or None,
+        discovery_folder_ids=_discovery_folders_from(env),
     )
 def _managed_folder_id_from(env: dict[str, str]) -> int | None:
     raw = env.get("BRIDGE_MANAGED_FOLDER_ID", "")
@@ -222,3 +232,16 @@ def _managed_folder_id_from(env: dict[str, str]) -> int | None:
         raise ConfigError("BRIDGE_MANAGED_FOLDER_ID must be a positive integer.")
     return value
 
+
+
+def _discovery_folders_from(env: dict[str, str]) -> tuple[int, ...]:
+    raw = env.get("BRIDGE_DISCOVERY_FOLDER_IDS", "")
+    if not raw:
+        return ()
+    try:
+        parts = raw.split(",")
+        if any(not part or not part.isascii() or not part.isdigit() for part in parts):
+            raise ValueError
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        raise ConfigError("BRIDGE_DISCOVERY_FOLDER_IDS must be comma-separated positive integers.") from None
