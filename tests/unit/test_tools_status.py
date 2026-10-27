@@ -120,3 +120,40 @@ def test_existing_linked_scope_can_read_external_asset_status(tmp_path):
     assert observed.ok and observed.status == "ready" and observed.indexed
     assert status(config, provider, repo, linked.asset_id, agent="other").error["code"] == "asset_not_found"
     repo.close()
+
+
+def test_rebuild_generation_change_refuses_even_when_row_metadata_matches(tmp_path):
+    config, provider, repo = setup(tmp_path)
+    asset = call(config, provider, repo)
+    indexed(config, provider, repo, asset)
+    saved = repo.asset(asset.asset_id, config.provider_instance_id)
+    assert saved["provider_generation"] == str(provider.generation)
+    provider.generation += 1
+    result = status(config, provider, repo, asset.asset_id)
+    assert result.status == "incompatible" and not result.indexed
+    assert result.reason_code == "index_incompatible" and not result.retryable
+    assert repo.locator_status(asset.asset_id, config.provider_instance_id) == "ready"
+    repo.close()
+
+
+def test_rebuild_during_resolve_never_binds_pending(tmp_path):
+    config, provider, repo = setup(tmp_path)
+    asset = call(config, provider, repo)
+    data = repo.asset(asset.asset_id, config.provider_instance_id)
+    shard, name = data["relative_managed_path"].split("/")
+    provider.files[9] = FakeFile(file_id=9, folder_id=1, name=name, rel_dir=shard,
+                                 size=data["size_bytes"], status="indexed")
+    provider.folder_files[1] = [9]
+    original = provider.status
+    calls = 0
+    def rebuilding():
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            provider.generation += 1
+        return original()
+    provider.status = rebuilding
+    report = resolve_pending(provider=provider, repo=repo, config=config)
+    assert not report.bound and report.waiting[0]["reason"] == "index_unavailable"
+    assert repo.locator_status(asset.asset_id, config.provider_instance_id) == "pending"
+    repo.close()
