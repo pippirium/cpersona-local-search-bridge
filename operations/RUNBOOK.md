@@ -287,3 +287,48 @@ or index evidence is refused. Historical external assets without a content
 digest are not rebound through candidate selection; retain the old association
 or investigate and explicitly re-establish it rather than guessing.
 Use `unlink_asset` to remove an association without deleting the image.
+
+
+## IMG-08: Scoped image provenance and schema v4 (Issue #62)
+
+Back up **the Bridge SQLite through SQLite online backup** while writers are stopped;
+also snapshot the managed root and staging root (if enabled). Schema v4 adds
+`asset_metadata` with a composite (scope, asset_id) key; the startup migration
+never alters image bytes, local-search index, CPersona memory text, provider locator
+or existing memory links. Verify `bridge_health.storage.schema_version == 4`.
+Older Bridge versions reject v4. Roll back only by restoring a matching pre-upgrade
+SQLite backup **and** matching managed/staging snapshots; do not downgrade in
+place or drop the metadata table to force the old binary to start. Post-upgrade
+provenance edits will be lost if you restore the older backup.
+
+The trusted host may set provenance after an explicit registration, or for a
+previously linked legacy asset. The same four-part scope MUST be repeated.
+Both read and update return `asset_not_found` for unknown/other-scope assets.
+They work without a running local-search process and never return image bytes.
+
+```json
+{"tool":"set_asset_metadata","arguments":{"agent_id":"example","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3","metadata_patch":{"user_caption":"synthetic example","caption_origin":"user","source_kind":"chat_attachment","recorded_at":"2026-10-28T00:00:00+09:00","consent_record":"explicit_user"}}}
+```
+```json
+{"tool":"get_asset_metadata","arguments":{"agent_id":"example","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3"}}
+```
+```json
+{"tool":"set_asset_metadata","arguments":{"agent_id":"example","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3","metadata_patch":{"user_caption":null}}}
+```
+
+An omitted key is unchanged; `null` deletes that value. Clearing
+`user_caption` also clears `caption_origin`; a non-null caption requires an
+origin. Metadata for an owner remains after unlink. A link-only scope loses
+access after its last link is removed, though the isolated metadata row persists
+until explicit cleanup of the asset. Field deletion has **no audit/history**
+record; make backups before bulk edits. `source_message_ref` must be an opaque,
+path-free identifier, not an original message body, URL, or user directory.
+`consent_record` merely records the trusted host's claim; it is **not**
+independent proof of consent. Captions are unverified user/external-source
+labels; automatic OCR/VLM/model captions are not implemented and metadata
+never substitutes for asset digest/index checks.
+
+Never duplicate the CPersona memory body into `user_caption`, store a
+user's local filename in the Bridge, or use the metadata endpoint as a file
+import. Import belongs to `ingest_image`/`import_staged_image`, memory body to
+CPersona, and image/index to local-search. The Bridge stores minimal provenance.
