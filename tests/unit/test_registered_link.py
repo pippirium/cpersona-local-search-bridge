@@ -251,3 +251,23 @@ def test_candidate_scope_is_rechecked_in_link_transaction(tmp_path, monkeypatch)
     result = link(cfg, provider, repo, state, candidate_token=found.candidates[0].candidate_token)
     assert result.error["code"] == "asset_not_found" and listed(cfg, repo).assets == []
     repo.close()
+
+
+def test_text_search_rejects_generation_change_during_hash_verification(tmp_path):
+    from bridge.tools_search import search_assets
+    cfg, provider, repo, state = discovery_setup(tmp_path, folder_ids=(1,), count=1)
+    found = discover_assets(provider=provider, repo=repo, config=cfg, state=state, agent_id="a", query="synthetic")
+    assert link(cfg, provider, repo, state, candidate_token=found.candidates[0].candidate_token).ok
+    old = provider.status
+    count = 0
+    def rebuilding():
+        nonlocal count
+        count += 1
+        if count == 2:
+            provider.generation += 1
+        return old()
+    provider.status = rebuilding
+    result = search_assets(provider=provider, repo=repo, provider_instance_id=cfg.provider_instance_id,
+        source_instance_id="", agent_id="a", project_id="", channel="", query="synthetic")
+    assert not result.ok and result.error["code"] == "index_incompatible" and result.results == []
+    repo.close()

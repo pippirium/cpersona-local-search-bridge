@@ -105,7 +105,7 @@ def _linked_identity(*, provider: ProviderPort, max_fetch_bytes: int, asset: dic
             return False
         again = provider.file_detail(file_id)
         if (not isinstance(again, dict) or again.get("kind") != "image" or not again.get("available", True)
-                or any(again.get(k) != detail.get(k) for k in fields)):
+                or again.get("status") != "indexed" or any(again.get(k) != detail.get(k) for k in fields)):
             return False
     return True
 

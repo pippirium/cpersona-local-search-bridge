@@ -351,6 +351,7 @@ def validate_candidate(*, provider: ProviderPort, repo: Repository, config: Brid
         if not isinstance(again, dict):
             raise BridgeError("index_incompatible")
         if (not again.get("available", True) or again.get("kind") != "image"
+                or again.get("status") != "indexed"
                 or any(again.get(key) != saved[key] for key in ("name", "rel_dir", "size", "mtime", "folder_id"))
                 or _live_generation(provider) != saved["generation"]):
             raise BridgeError("asset_unavailable")

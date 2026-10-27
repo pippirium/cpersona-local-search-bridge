@@ -119,6 +119,7 @@ def search_assets(
         # ---- scope intersection BEFORE response (docs/04) --------------------
         out: list[SearchAssetEntry] = []
         seen: set[str] = set()
+        verified_hash = False
         for item in candidates:
             file_id = item.get("file_id")
             if file_id is None:
@@ -143,6 +144,7 @@ def search_assets(
                             max_fetch_bytes=max_fetch_bytes, asset=asset, item=item, generation=str(generation))):
                         provider_warning = "asset_unavailable"
                         continue
+                    verified_hash = True
                 refs = repo.links_for_asset(
                     source_instance_id=source_instance_id, agent_id=agent_id,
                     project_id=project_id, channel=channel, asset_id=asset_id,
@@ -164,6 +166,12 @@ def search_assets(
                     break
             if len(out) >= limit:
                 break
+
+        if verified_hash:
+            fresh = provider.status().get("index") or {}
+            if (fresh.get("mismatch") or fresh.get("generation") is None
+                    or str(fresh.get("generation")) != str((st.get("index") or {}).get("generation"))):
+                raise BridgeError("index_incompatible")
 
         # ---- coverage truth ----------------------------------------------------
         # exact requires: provider pages fully exhausted AND we consumed the
