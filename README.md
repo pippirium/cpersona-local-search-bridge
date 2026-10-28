@@ -84,6 +84,7 @@ flowchart LR
 | [20 — IMG-09 3プロセス拡張受入](docs/20-img09-three-process-acceptance.md) | 2系統の画像入力、明示リンク、想起、scope負例・運用復旧手順の合成E2E（隔離実行済み・fake embedder） |
 | [16 — 3プロセス受入試験](docs/16-three-process-acceptance.md) | 実CPersona・Bridge stdioプロセスと隔離local-searchの合成画像フロー（fake embedder、品質評価ではない） |
 | [17 — 実モデル色画像probe](docs/17-real-color-probe.md) | 固定revisionのEmbeddingGemma 2・合成12クエリの実測と限界、per-query成果物 |
+| [18 — CP-02 評価監査](docs/18-cp02-evaluation-audit.md) | 評価2層の分離・比較可能ベースライン・3モデル固定条件phaseの実測境界と受け入れ範囲の照合 |
 | [19 — 画像入力 API の設計契約](docs/19-image-input-contract.md) | 未索引画像の入力・所有scope・明示リンク・安全な検索の契約 |
 | [RUNBOOK](operations/RUNBOOK.md) | インストール・MCP登録・pin表・backup/restore・rebuild対応・診断・プライバシー点検・既知の限界 |
 | [RELEASE-CHECKLIST](operations/RELEASE-CHECKLIST.md) | リリースゲート（実測記録・運用リハ・セキュリティ・文書誠実性） |
@@ -95,7 +96,7 @@ flowchart LR
 - **M0 — 契約と設計の確定:** ✅ 完了（B-01〜B-03, LS-01。docs/10・docs/13）
 - **M1 — 最小MCPアダプター:** ✅ 完了（B-04〜B-09。healthを含む6ツール）
 - **M2 — ファイル取り込み・運用:** ✅ 完了（B-10〜B-12, CP-01。管理コピー・pending解決・状態機械・監査。計9ツール）
-- **M3 — 結合評価:** 🔄 進行中（B-13監査・B-14 eval CLI・B-15 runbookはmainへマージ済み。3プロセス結合はdocs/16で検証済み。実モデルの小規模probeはdocs/17。CP-02・一般品質評価は未完了）
+- **M3 — 結合評価:** 🔄 進行中（B-13監査・B-14 eval CLI・B-15 runbookはmainへマージ済み。3プロセス結合はdocs/16で検証済み。実モデルの小規模probeはdocs/17。CP-02の固定条件phaseはdocs/18に記録、全LMEB・一般品質評価は未完了）
 
 GitHub Issueは**Bridgeで全体を統括**し、他リポジトリへの変更が本当に必要なときだけ別途承認を得て作業します。CPersona側のfork policyに従い、[Cloto-dev/CPersona](https://github.com/Cloto-dev/CPersona)へのpushやPRは行いません。
 
