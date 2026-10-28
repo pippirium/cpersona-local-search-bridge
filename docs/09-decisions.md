@@ -82,6 +82,8 @@ A predeclared 12-query, three-image RGB manifest was run against pinned real Emb
 
 The proposed image APIs use bounded data or an operator-controlled staging handoff and store exact-scope owner evidence independently of memory links. Deduplication must not reveal other-scope ownership; legacy links retain their prior visibility. User approval and CPersona reference provenance are trusted-host responsibilities, not self-asserted authentication. EmbeddingGemma 2, stdio and the existing explicit fetch boundary remain unchanged. [docs/19](19-image-input-contract.md) specifies the design, migration and rollback; this decision does not claim runtime implementation. D-30 is reserved here because the concurrent CP-02 PR uses D-29.
 
+**Attribution correction:** The [original IMG-01 commit in PR #64](https://github.com/pippirium/cpersona-local-search-bridge/commit/cfee1ec88b98d684621f2435202d306449dddb26) records `Co-authored-by: Codex <codex@openai.com>`. The squash merge `d0b3636` omitted that trailer in error. This note preserves the attribution on main without rewriting published history; it does not change the contract or runtime.
+
 ## D-31 — Typed result null fields (IMG-02, #56)
 
 MCP SDK typed result serialization includes unused optional fields as JSON null. The ingest success and error schema allows these null fields while forbidding actual partial results on errors. This corrects the proposed response shape to match the executable wire behavior; it does not change authorization or media-return rules.
