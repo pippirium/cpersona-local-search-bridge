@@ -48,6 +48,7 @@ def verify_real_model(status: dict, expected_revision: str) -> None:
     model = status.get("model") or {}
     if (model.get("id") != "google/embeddinggemma-2"
             or model.get("revision") != expected_revision
+            or model.get("state") != "ready"
             or expected_revision in ("", "fake")):
         raise ValueError("real EmbeddingGemma 2 model revision did not match the requested pin")
 
