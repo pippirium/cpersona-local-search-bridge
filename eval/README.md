@@ -47,3 +47,38 @@ registers folders and never touches provider data outside that folder.
 IMG-06 adds a user-facing `search_assets_by_image` MCP tool that delegates to
 the same local-search media endpoint. This evaluation remains separate: fake
 embeddings and this tool's availability do not establish retrieval quality.
+
+
+## Real EmbeddingGemma 2 provenance gate (Issue #76)
+
+When a benchmark is presented as **real-model evidence**, add the strict model
+revision gate to the normal command:
+
+```sh
+uv run python -m eval.run \
+  --manifest eval/manifest.colors.json \
+  --provider http://127.0.0.1:<DEDICATED-TEST-PORT> \
+  --watched-dir <DEDICATED-REGISTERED-IMAGE-DIR> \
+  --managed-folder-id <EXACT-TEST-FOLDER-ID> \
+  --data-dir <NEW-THROWAWAY-BRIDGE-DIR> \
+  --out <PRIVATE-RESULT-DIR> \
+  --warmup 2 \
+  --expect-model-revision 914f7f89142e33e77833254d9c9b90c3cef7303b
+```
+
+Placeholders must be replaced with dedicated paths/IDs; the existing
+local-search operator must register the folder and start a **real** provider
+first. The flag fails before fixture creation if `/api/status` reports a fake,
+missing, abbreviated or different EmbeddingGemma 2 model. The output records
+the provider's reported `model_revision` (not proof of artifact bytes;
+the model snapshot and other hashes must still be verified separately).
+
+A case whose query fails, or whose labeled relevant fixture was never indexed,
+is **not scored as a miss**. Per-query errors and `partial` status remain
+visible; a task with no valid successful samples is `unmeasured`. Do not
+cite a partial task's numeric mean as a complete benchmark. The prior
+12-query solid-color result is still only a smoke test: realistic images,
+graded qrels and image-to-image negatives require additional dataset/evaluator
+work in #76; pure Bridge memory-link results do not measure CPersona semantic
+recall. For end-to-end CPersona/Bridge/local-search real-model verification,
+see #77.

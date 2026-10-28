@@ -78,3 +78,49 @@ def test_unknown_generator_rejected(tmp_path):
         raise AssertionError("must reject unknown generators")
     except ValueError:
         pass
+
+
+def test_real_model_provenance_must_be_explicit_and_exact():
+    import pytest
+    from eval.run import verify_real_model
+
+    expected = "914f7f89142e33e77833254d9c9b90c3cef7303b"
+    verify_real_model({"model": {"id": "google/embeddinggemma-2",
+                                 "revision": expected, "state": "ready"}}, expected)
+    for status in (
+        {},
+        {"model": {"id": "google/embeddinggemma-2", "revision": "fake", "state": "ready"}},
+        {"model": {"id": "other-model", "revision": expected, "state": "ready"}},
+        {"model": {"id": "google/embeddinggemma-2", "revision": expected[:8], "state": "ready"}},
+        {"model": {"id": "google/embeddinggemma-2", "revision": expected, "state": "loading"}},
+    ):
+        with pytest.raises(ValueError, match="revision"):
+            verify_real_model(status, expected)
+
+
+def test_partial_status_and_model_revision_are_schema_valid(tmp_path):
+    import jsonschema
+    result = {
+        "schema_version": 1,
+        "env": {
+            "bridge_commit": "x", "provider_version": "0.1.1",
+            "provider_generation": 1, "embedder": "google/embeddinggemma-2",
+            "model_revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+            "device": "cpu", "executed_at": "now", "warmup": 2,
+        },
+        "tasks": {"image_to_image": {
+            "query_count": 2, "missing_qrels": 0, "errors": 1,
+            "status": "partial",
+            "metrics": {"ndcg_at_10": 1.0, "recall_at_10": 1.0,
+                        "success_at_10": 1.0, "mrr_at_10": 1.0,
+                        "p50_ms": 25.0, "p95_ms": 25.0},
+        }},
+        "per_query": [],
+        "limitations": ["one query failed; only one successful query scored"],
+    }
+    schema = json.loads((Path(__file__).resolve().parents[2] / "eval" /
+                         "schema.json").read_text())
+    jsonschema.validate(result, schema)
+    write_report(result, tmp_path / "out")
+    report = (tmp_path / "out" / "report.md").read_text()
+    assert "partial" in report and "one query failed" in report
