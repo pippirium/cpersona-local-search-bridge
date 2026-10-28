@@ -64,11 +64,11 @@ async def _run(args: argparse.Namespace) -> dict:
     work.mkdir(mode=0o700, parents=True, exist_ok=True)
     cfg = validate_config(data_dir=work / "bdata",
                           provider_base_url=args.provider)
-    repo = Repository(open_repository(work / "bdata"))
     client = LocalSearchClient(cfg)
     st = client.status()
     if args.expect_model_revision:
         verify_real_model(st, args.expect_model_revision)
+    repo = Repository(open_repository(work / "bdata"))
     env = {
         "bridge_commit": _bridge_commit(),
         "provider_version": st.get("version"),
