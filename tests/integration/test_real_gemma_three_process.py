@@ -37,8 +37,14 @@ def test_real_gemma_three_process_isolated(tmp_path):
     cache = Path(CACHE_DIR).expanduser().resolve()
     src = cache / MODEL_ROOT
     snapshot = src / "snapshots" / REV
-    required = ("model.safetensors", "config.json", "modules.json", "tokenizer.json")
-    assert src.is_dir() and all((snapshot / name).is_file() for name in required), (
+    required = (".gitattributes", "1_Pooling/config.json", "2_Normalize/config.json",
+                "README.md", "chat_template.jinja", "config.json",
+                "config_sentence_transformers.json", "model.safetensors",
+                "modules.json", "preprocessor_config.json", "processor_config.json",
+                "sentence_bert_config.json", "tokenizer.json",
+                "tokenizer_config.json", "vocab.json")
+    assert src.is_dir() and all((snapshot / name).is_file() and (snapshot / name).stat().st_size > 0
+                                for name in required), (
         "dedicated pinned Gemma cache missing; do not use a production data dir")
     provider_dir = tmp_path / "provider"
     provider_dir.mkdir(mode=0o700)
