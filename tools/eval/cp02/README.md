@@ -37,8 +37,8 @@ use `/tmp` for anything you cannot afford to lose.
 | 1 | `download_lmeb.py` | fetches the 23-task eval_data subset at the pinned revision into `$WORKDIR/lmeb/eval_data`, size-verifies every file |
 | 2 | `fetch_gemma_snapshot.py` | pinned `snapshot_download` into `$WORKDIR/hf-cache` (offline afterwards) |
 | 3 | `run_gemma_trackb.sh` | single-task arm launcher; env contract documented in the file header |
-| 4 | `launch_chunked.sh` | one process per task, smallest-first, skip-if-exists |
-| 5 | `monitor.sh` | kills a stalled task after `STALL_SEC` without log growth; aborts the runner after 3 consecutive stalls |
+| 4 | `launch_chunked.sh` / `chunk_runner.py` | one process per task; validate pinned files, result JSON, SHA and run fingerprints before resuming |
+| 5 | `chunk_runner.py --stall-seconds 1200` | optional per-task stall watchdog (cross-platform POSIX), terminates only its child process group; obsolete macOS-only `monitor.sh` should **not** be launched alongside the new runner |
 
 The launcher copies the harness out of the worktree and applies exactly two
 deviations to the **copy** (never the fork checkout), both recorded in D-29:
@@ -122,3 +122,61 @@ Before any long run, check free RAM: if the compressor is already multi-GB,
 the machine will stall or freeze during encoding (the failure mode documented
 above). Only tasks ≤ ~6k docs are realistic on a 32 GB-class Mac; larger
 corpora need a machine with headroom, and that run is still open work.
+
+## Separate-machine runner (Issue #75, review branch)
+
+**This runner does not make the 19 unmeasured tasks measured.** The actual
+Gemma/Track B tests must be performed on the separate PC. Use the executable
+`tools/eval/cp02/chunk_runner.py` provided by this branch and review/merge
+PR #53 before expecting these scripts on `main`.
+
+The legacy launcher skipped by file existence and printed "ALL CHUNKS DONE"
+after failed tasks. The replacement refuses that false-success behavior:
+
+1. Fingerprints the pinned Gemma snapshot content, *all* LMEB downloaded bytes,
+   the dataset manifest, two CPersona worktree commits, runner/launcher SHA,
+   dtype, device and token window. Keep `WORKDIR`, `OUTPUT_DIR` and
+   `EMB_CACHE_DIR` dedicated, with no production data mounted.
+2. Validates the output JSON's task identity, finite score, subtask count and
+   time; additionally requires a SHA-bound `<Task>.completed.json` marker
+   carrying the matching run-context fingerprint before skipping.
+3. Runs tasks sequentially in a child process group, preserving per-task
+   stdout/stderr in a non-overwriting log. On nonzero exit or stall, exits
+   nonzero rather than publishing an all-done claim. The stall watchdog uses
+   log growth as a proxy: long silent but healthy runs can time out, so set
+   an appropriate limit and check task logs.
+4. An interrupted/invalid task is **not** silently overwritten: move its
+   `<Task>.json`, marker (if any) and `task_<Task>.log` aside **manually**
+   before retrying. For different model/device/window/code/data, use a
+   **new output directory**. `summary.json` from upstream's harness may
+   refer only to the most recently requested task; never treat it as a
+   cross-task aggregate.
+
+After the existing `WORKDIR`, `CP_BENCH_WT`, `CP_ARM_WT`, `VENV`,
+`OUTPUT_DIR` and `EMB_CACHE_DIR` variables and the data/model snapshots
+are set up, run:
+
+```sh
+# Small smoke first; script supports cpu/mps/cuda as a forwarded argument,
+# but CUDA bf16 and all library versions MUST be checked on that machine.
+CP02_TASKS='ESGReports' CP02_DEVICE=cpu \
+  bash tools/eval/cp02/launch_chunked.sh --window 1024
+
+# Explicit chunk list, one task at a time; use a longer stall window if needed:
+python3 tools/eval/cp02/chunk_runner.py \
+  --tasks 'LoCoMo,ESGReports' --device cpu \
+  --window 1024 --stall-seconds 3600
+```
+
+On Linux, do not run the old macOS-specific `monitor.sh`
+(`sample`, `stat -f`). On CUDA, the copied harness uses bfloat16,
+which requires compatible GPU/torch; confirm that it loads without error.
+If a new PC needs adapted model-loading code, update the launcher in a
+reviewable commit and let the changed SHA force new output fingerprints.
+A stored `run-context.json` is **run metadata, not proof of successful
+execution**. Read the per-task markers and report failed/unmeasured tasks.
+
+Before publishing results, strip any local absolute paths or sensitive
+text from the upstream benchmark's JSON/logs. This runner only writes
+local private outputs, does not load any production DB, and does not
+run a generation LLM.
