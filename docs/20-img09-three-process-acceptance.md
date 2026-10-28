@@ -1,9 +1,9 @@
 # IMG-09 — Synthetic three-process image-to-memory acceptance (#63)
 
-**Status: automation added, execution pending.** This report is not a certification,
-and new assertions are not claimed to have passed. See [docs/16](16-three-process-acceptance.md)
-for the **historical** B-13 pass from 2026-10-26. This test extends that case;
-its current result requires a fresh isolated run. No individual user data is used.
+**Status: isolated synthetic acceptance passed on 2026-10-28.** This is not a
+release certification or a semantic-quality measurement. See [docs/16](16-three-process-acceptance.md)
+for the separate **historical** B-13 pass from 2026-10-26. No individual user
+data was used in the new run.
 
 ## Scope and prerequisites
 
@@ -18,7 +18,7 @@ Three distinct processes run only on disposable data:
    No running user's local-search instance is contacted or stopped.
 
 Prerequisite: [PR #71](https://github.com/pippirium/cpersona-local-search-bridge/pull/71)
-must be merged before this PR's new v4 provenance assertions can pass.
+was merged before this run, providing schema v4 provenance support.
 The test is opt-in, marked skip unless both executable environment variables
 are present. The test runner creates its own roots under pytest `tmp_path`.
 The operator must ensure the supplied executables really are isolated test
@@ -70,23 +70,29 @@ explicit `resolve_pending_assets` is required to bind and observe `ready`.
 
 | Requirement | Evidence | Execution status in this PR |
 | --- | --- | --- |
-| Real CPersona store → memory ref → link → recall/reconstruct; no image bytes in normal memory | `tests/integration/test_three_process.py` | Not yet rerun |
-| Bridge health, configured watched folder, both direct and staged input | same file | Not yet rerun |
-| Unlinked image never appears in `list_memory_assets` | same file | Not yet rerun |
-| Scoped `get_ingest_status`, pending → ready, explicit `get_asset` identical bytes | same file | Not yet rerun |
-| Source provenance after unlink and other-scope denial | `test_three_process.py` plus PR #71 `test_tools_metadata.py` | Not yet rerun |
-| `search_assets_by_image` returns metadata only | `test_three_process.py`; `tests/unit/test_tools_image_search.py` | Not yet rerun |
-| Unallowed folder, cross-scope and bad bytes refused | `test_three_process.py`; `tests/unit/test_tools_ingest.py` | Not yet rerun |
-| No automatic discovery→link | `tests/unit/test_tools_discover.py::test_discovery_has_no_implicit_links_and_hides_inputs_from_logs` | Existing test, not rerun |
-| Expired or replaced staging token, no confirmation, symlink/hardlink, retry/DB failure | `tests/unit/test_staging.py` | Existing tests, not rerun |
-| Same-size different content; index churn, source deletion, content drift | `tests/unit/test_reconcile.py`, `tests/unit/test_tools_image_search.py`, `tests/unit/test_tools_get.py` | Existing tests, not rerun |
-| Provider outage, timeout, retry, partial pages | `tests/unit/test_http_client.py`, `tests/unit/test_tools_image_search.py` | Existing tests, not rerun |
-| Scope contract, unauthorized media access, information leakage | `tests/security/`, `tests/unit/test_tools_get.py` | Existing tests, not rerun |
-| Compatibility of previous MCP tools | `tests/unit/test_server_health.py` tool listing + existing contract suite | Existing tests, not rerun |
+| Real CPersona store → returned memory ref → link → recall/reconstruct; no image bytes in normal memory | `tests/integration/test_three_process.py` | Passed in isolated run |
+| Bridge health, configured watched folder, both direct and staged input | same file | Passed in isolated run |
+| Allowed unlinked candidate is discoverable, absent from memory search until explicitly linked, then unlink removes search results | same file | Passed in isolated run |
+| Scoped `get_ingest_status`, pending → ready, explicit `get_asset` identical bytes | same file | Passed in isolated run |
+| Source provenance after unlink and other-scope denial | `test_three_process.py` plus PR #71 `test_tools_metadata.py` | Passed in isolated run |
+| `search_assets_by_image` returns metadata only | `test_three_process.py`; `tests/unit/test_tools_image_search.py` | Passed in isolated run |
+| Unallowed folder, cross-scope and bad bytes refused | `test_three_process.py`; `tests/unit/test_tools_ingest.py` | Passed in isolated run |
+| No automatic discovery→link | `tests/unit/test_tools_discover.py::test_discovery_has_no_implicit_links_and_hides_inputs_from_logs` | Passed offline |
+| Expired or replaced staging token, no confirmation, symlink/hardlink, retry/DB failure | `tests/unit/test_staging.py` | Passed offline |
+| Same-size different content; index churn, source deletion, content drift | `tests/unit/test_reconcile.py`, `tests/unit/test_tools_image_search.py`, `tests/unit/test_tools_get.py` | Passed offline |
+| Provider outage, timeout, retry, partial pages | `tests/unit/test_http_client.py`, `tests/unit/test_tools_image_search.py`; provider outage in three-process test | Passed offline and isolated |
+| Long pending, cancellation, publication interruption/restart, same-size row-ID reuse and deletion with metadata retained | `tests/integration/test_acceptance_failures.py` | Passed offline with synthetic fake provider |
+| Existing B-14 CLI, generated media and image-only manifest | `tests/integration/test_eval_live.py` | Passed against isolated fake-embedder provider |
+| Runbook online SQLite backup, no overwrite and matching v4 restore | `tests/integration/test_acceptance_failures.py` | Passed with temporary DB and root snapshots |
+| No query, attachment bytes, staging token, caption or source paths in Bridge child log | `tests/integration/test_three_process.py` | Passed in isolated run |
+| Scope contract, unauthorized media access, information leakage | `tests/security/`, `tests/unit/test_tools_get.py` | Passed offline |
+| Compatibility of previous MCP tools | `tests/unit/test_server_health.py` tool listing + existing contract suite | Passed offline |
 
-The real CPersona/real model semantic precision, actual commercial host image
-transfer support, long-duration pending under load, fresh-Mac dry run and
-full crash/rebuild on a live provider are **not verified** by this new case.
+Real-model semantic precision, image transfer in any specific commercial host,
+a real long-duration pending period under load, fresh-Mac dry run and live
+crash/rebuild are **not verified** by this new case. Old pending, publication
+interruption and index rebuild/row-ID reuse were simulated in isolated tests;
+the historical live rebuild observation remains in docs/15.
 They cannot be marked accepted on the strength of fake embeddings. For any
 host lacking native image forwarding, the documented local staging alternative
 is required; do not silently read chat attachments or user paths.
@@ -107,18 +113,17 @@ payloads, source messages, or personal media. Every failed MCP call must
 return a sanitized error code. A cancelled user association is an absent link,
 not permission to auto-link after retried discovery.
 
-## Result collection (fill after executing)
+## Recorded result
 
-- Bridge commit and versions:
-- CPersona executable/checkpoint:
-- local-search executable/checkpoint:
-- Fake vs real embedder:
-- `uv run pytest -q`: **not run here**
-- `uv run pytest tests/security -q`: **not run here**
-- `uv run pytest tests/integration/test_three_process.py -q`: **not run here**
-- Distinct scopes/source bytes intact:
-- Known unsupported host paths:
-- Failure remediation notes:
+- Bridge: the IMG-09 branch based on main after PR #71 (`a2f8a21`); schema v4.
+- CPersona fork archive `7821840f114866673022edfc5fe4b21a9b08a5e5`, version 2.6.13a2, installed in an isolated environment. Embeddings disabled, so its recall emitted a keyword-only advisory; no generation model was run.
+- local-search checkout `31f31048fb8edeedf0f94d295bc0c9471000920a`, version 0.1.1, dedicated temp data and the fake embedder.
+- `uv run pytest -o addopts='' -q`: **465 passed, 7 skipped** (optional live tests).
+- `uv run pytest tests/security -o addopts='' -q`: **23 passed**.
+- With both explicit isolated executable variables set, `uv run pytest tests/integration/test_three_process.py tests/integration/test_ingest_live.py tests/integration/test_eval_live.py -o addopts='' -q`: **3 passed**.
+- The unchanged B-14 CLI ran with a temporary image-only derivative of the example manifest. An initial attempt with the example ZIP fixture timed out because the image-only watched folder did not index that fixture; no real-model quality or model comparison is claimed.
+- Both scopes were exercised; all source images were synthetic and remained unchanged. The Bridge child log was checked for the generated query, image input, token, caption and source-path sentinels.
+- The MCP Python client transferred Base64 in this test; support in a particular end-user host remains unverified. The documented staging handoff is the alternative.
 
-Do not close #63 on only a unit-test pass; its acceptance requires a real
-isolated three-process execution and honest runtime evidence.
+The fake-embedder outputs establish protocol and isolation behavior only. They do
+not measure real EmbeddingGemma 2 retrieval quality or validate a fresh Mac install.
