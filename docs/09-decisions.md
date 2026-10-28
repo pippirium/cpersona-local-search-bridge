@@ -153,3 +153,7 @@ backup/restore is the rollback path. User claims, consent codes and dates
 are never authentication, image identity evidence, or a reason to update the
 provider locator. Reject free-text URLs, filesystem paths and unsafe controls;
 do not add provenance to ordinary search results (backward-compatible).
+The v4 repository locks the database transaction before authorizing and merging
+patches, preventing concurrent writers from dropping each other's changes.
+The exact safe reference alphabet, namespace and timestamp precision are in
+docs/19; malformed stored metadata fails closed instead of being echoed.

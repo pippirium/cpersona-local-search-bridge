@@ -29,6 +29,10 @@ _TIMESTAMP = re.compile(
 )
 _OPAQUE = re.compile(r"^[A-Za-z0-9._:-]+$")
 _URL_OR_PATH = re.compile(r"(?i)(?:https?\s*:\s*|file\s*:|data\s*:|www\.|[/\\]|~[/\\])")
+_DOMAIN = re.compile(r"(?i)\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b")
+_URI_SCHEME = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*:\S+")
+_DRIVE = re.compile(r"(?i)(?:^|\s)[a-z]:(?:\s|$)")
+_ALLOWED_NAMESPACES = {"opaque", "msg", "message", "mem", "ep"}
 
 
 @dataclass
@@ -48,7 +52,8 @@ def _safe_string(value: str, max_bytes: int) -> bool:
     except UnicodeError:
         return False
     return (not any(unicodedata.category(c).startswith("C") for c in value)
-            and not _URL_OR_PATH.search(value))
+            and not _URL_OR_PATH.search(value) and not _DOMAIN.search(value) and ".." not in value
+            and not value.lstrip().startswith("~"))
 
 
 def _timestamp_valid(value: str) -> bool:
@@ -77,10 +82,13 @@ def validate_patch(patch: object) -> dict[str, str | None]:
             if not _timestamp_valid(value):
                 raise BridgeError("invalid_request")
         elif key == "user_caption":
-            if not _safe_string(value, 1000):
+            if not _safe_string(value, 1000) or _URI_SCHEME.search(value) or _DRIVE.search(value):
                 raise BridgeError("invalid_request")
         elif key == "source_message_ref":
-            if not _safe_string(value, 128) or not _OPAQUE.fullmatch(value):
+            if (not _safe_string(value, 128) or value.startswith(".") or not _OPAQUE.fullmatch(value)
+                    or (":" in value and (value.count(":") != 1
+                        or value.split(":", 1)[0].lower() not in _ALLOWED_NAMESPACES
+                        or not value.split(":", 1)[1]))):
                 raise BridgeError("invalid_request")
     return dict(patch)
 

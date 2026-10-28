@@ -988,24 +988,42 @@ class Repository:
             " WHERE source_instance_id=? AND agent_id=? AND project_id=?"
             " AND channel=? AND asset_id=?", (*scope, asset_id),
         ).fetchone()
-        return {name: value for name, value in zip(columns, row) if value is not None} if row else {}
+        result = {name: value for name, value in zip(columns, row) if value is not None} if row else {}
+        if result:
+            from bridge.errors import BridgeError
+            from bridge.tools_metadata import validate_patch
+            try:
+                validate_patch(result)
+            except BridgeError:
+                raise StorageError("invalid stored metadata") from None
+            if bool(result.get("user_caption")) != bool(result.get("caption_origin")):
+                raise StorageError("invalid stored metadata")
+        return result
 
     def read_asset_metadata(self, *, scope: tuple[str, str, str, str], asset_id: str) -> dict:
         with self.lock:
             scope = normalize_scope(*scope)
-            if not ASSET_ID_RE.fullmatch(asset_id) or not self._metadata_visible_locked(scope, asset_id):
-                raise AssetNotFound("asset not visible")
-            return self._read_metadata_locked(scope, asset_id)
+            try:
+                self._conn.execute("BEGIN")
+                if not ASSET_ID_RE.fullmatch(asset_id) or not self._metadata_visible_locked(scope, asset_id):
+                    raise AssetNotFound("asset not visible")
+                result = self._read_metadata_locked(scope, asset_id)
+                self._conn.commit()
+                return result
+            except BaseException:
+                self._conn.rollback()
+                raise
 
     def patch_asset_metadata(self, *, scope: tuple[str, str, str, str],
                              asset_id: str, patch: dict) -> dict:
         with self.lock:
             scope = normalize_scope(*scope)
+            from bridge.tools_metadata import validate_patch
             columns = ("user_caption", "caption_origin", "source_kind", "captured_at",
                        "recorded_at", "source_message_ref", "consent_record")
-            if not patch or any(key not in columns for key in patch):
-                raise RequestConflict("invalid metadata patch")
-            with self._conn:
+            patch = validate_patch(patch)
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 if not ASSET_ID_RE.fullmatch(asset_id) or not self._metadata_visible_locked(scope, asset_id):
                     raise AssetNotFound("asset not visible")
                 merged = self._read_metadata_locked(scope, asset_id)
@@ -1029,7 +1047,11 @@ class Repository:
                         " VALUES (" + ", ".join("?" for _ in range(13)) + ")",
                         (*scope, asset_id, *(merged.get(key) for key in columns), utc_now()),
                     )
+                self._conn.commit()
                 return merged
+            except BaseException:
+                self._conn.rollback()
+                raise
 
     def locator_status(self, asset_id: str,
                        provider_instance_id: str) -> str | None:

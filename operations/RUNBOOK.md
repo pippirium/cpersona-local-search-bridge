@@ -323,6 +323,10 @@ access after its last link is removed, though the isolated metadata row persists
 until explicit cleanup of the asset. Field deletion has **no audit/history**
 record; make backups before bulk edits. `source_message_ref` must be an opaque,
 path-free identifier, not an original message body, URL, or user directory.
+Allowed characters are ASCII letters, digits, `.`, `_`, `-`; one of `opaque:`,
+`msg:`, `message:`, `mem:`, or `ep:` may prefix it. URL-like domains, path
+components and leading dots are rejected. Date strings require an explicit
+timezone and at most six fractional digits; their original offset is retained.
 `consent_record` merely records the trusted host's claim; it is **not**
 independent proof of consent. Captions are unverified user/external-source
 labels; automatic OCR/VLM/model captions are not implemented and metadata

@@ -201,3 +201,59 @@ def test_caller_cannot_supply_path_or_unknown_field_via_mcp(tmp_path):
         repo.close()
 
     anyio.run(check)
+
+
+@pytest.mark.parametrize("patch", [
+    {"user_caption": "ftp:synthetic", "caption_origin": "user"},
+    {"user_caption": "sample.example", "caption_origin": "user"},
+    {"user_caption": "C:synthetic", "caption_origin": "user"},
+    {"user_caption": "C:", "caption_origin": "user"},
+    {"source_message_ref": "mailto:synthetic"},
+    {"source_message_ref": "example.invalid"},
+    {"source_message_ref": ".."},
+    {"source_message_ref": ".hidden"},
+])
+def test_url_and_path_like_metadata_is_rejected(tmp_path, patch):
+    repo = Repository(open_repository(tmp_path))
+    asset = _asset(repo)
+    assert _set(repo, asset, patch).error["code"] == "invalid_request"
+    assert _get(repo, asset).metadata == {}
+    repo.close()
+
+
+def test_parallel_scope_patches_use_immediate_transaction_and_merge(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    data = tmp_path / "db"
+    data.mkdir()
+    repo = Repository(open_repository(data))
+    asset = _asset(repo)
+    statements = []
+    repo._conn.set_trace_callback(statements.append)
+    assert _set(repo, asset, {"source_kind": "chat_attachment"}).ok
+    assert any(item.upper().startswith("BEGIN IMMEDIATE") for item in statements)
+    repo.close()
+    def worker(patch):
+        local = Repository(open_repository(data))
+        try:
+            return _set(local, asset, patch)
+        finally:
+            local.close()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(worker, [{"captured_at": "2026-10-26T03:34:56Z"},
+                                         {"consent_record": "explicit_user"}]))
+    assert all(result.ok for result in results)
+    repo = Repository(open_repository(data))
+    assert _get(repo, asset).metadata == {"source_kind": "chat_attachment",
+        "captured_at": "2026-10-26T03:34:56Z", "consent_record": "explicit_user"}
+    repo.close()
+
+
+def test_corrupt_stored_provenance_is_not_returned_or_overwritten(tmp_path):
+    repo = Repository(open_repository(tmp_path))
+    asset = _asset(repo)
+    assert _set(repo, asset, {"user_caption": "synthetic", "caption_origin": "user"}).ok
+    repo._conn.execute("UPDATE asset_metadata SET user_caption=? WHERE asset_id=?", ("bad/path", asset))
+    repo._conn.commit()
+    assert _get(repo, asset).error["code"] == "storage_error"
+    assert _set(repo, asset, {"source_kind": "local_selection"}).error["code"] == "storage_error"
+    repo.close()

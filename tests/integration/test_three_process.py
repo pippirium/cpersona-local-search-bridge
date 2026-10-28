@@ -190,6 +190,14 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     associated = _payload(await assets.call_tool("link_registered_asset", {
                                         **scope, "memory_ref": ref, "asset_id": new["asset_id"]}))
                                     assert associated["ok"] and associated["link_status"] == "pending"
+                                    metadata = _payload(await assets.call_tool("set_asset_metadata", {
+                                        **scope, "asset_id": new["asset_id"], "metadata_patch": {
+                                            "user_caption": "synthetic blue", "caption_origin": "user",
+                                            "source_kind": "chat_attachment"}}))
+                                    assert metadata["ok"] and metadata["metadata"]["user_caption"] == "synthetic blue"
+                                    denied_metadata = _payload(await assets.call_tool("get_asset_metadata", {
+                                        **scope, "agent_id": "other", "asset_id": new["asset_id"]}))
+                                    assert denied_metadata["error"]["code"] == "asset_not_found"
                                     listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
                                     assert new["asset_id"] in [entry["asset_id"] for entry in listed["assets"]]
                                     deadline = time.monotonic() + 30
