@@ -80,3 +80,21 @@ def test_fingerprint_rejects_path_traversal(tmp_path):
     cache = tmp_path / "cache"; cache.mkdir()
     with pytest.raises(ValueError, match="unsafe"):
         runner.fingerprint(work, bench, arm, SCRIPT, "cpu", 1024, cache)
+
+
+def test_success_stamps_and_resumes_without_rerunning(tmp_path):
+    output = tmp_path / "out"; output.mkdir()
+    logs = tmp_path / "logs"; logs.mkdir()
+    script = tmp_path / "succeed.sh"
+    script.write_text(
+        "#!/bin/bash\n"
+        "cat > \"$OUTPUT_DIR/Example.json\" <<'JSON'\n"
+        + json.dumps(result()) + "\nJSON\n"
+    )
+    ctx = {"model": "demo"}
+    env = {"PATH": "/usr/bin:/bin", "OUTPUT_DIR": str(output)}
+    assert runner.run_task("Example", script, output, logs, ctx, env, 5, 1)
+    marker = json.loads((output / "Example.completed.json").read_text())
+    assert marker["result_sha256"] == runner.sha256(output / "Example.json")
+    script.unlink()  # A re-execution would fail; cache verification must skip it.
+    assert runner.run_task("Example", script, output, logs, ctx, env, 5, 1)
