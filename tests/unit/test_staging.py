@@ -217,7 +217,7 @@ def test_upgrade_v2_preserves_existing_owner_and_retry(tmp_path):
     before = create(old, request_id="key")
     old.close()
     upgraded = Repository(open_repository(tmp_path))
-    assert upgraded.schema_version() == 3
+    assert upgraded.schema_version() == 4
     assert upgraded.owned_asset(scope=SCOPE_A, asset_id=before["asset_id"])
     assert create(upgraded, request_id="key") == before
     upgraded.close()

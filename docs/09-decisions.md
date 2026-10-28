@@ -139,3 +139,21 @@ verified digest, which both explicit fetch and linked search recheck. Historical
 external assets without a digest are not rebound through candidate selection.
 Safety checks precede retry replay, so a changed or unavailable source fails
 closed even when the request key was previously successful.
+
+
+## D-37 — Scoped user-authored provenance is not source identity (IMG-08, #62)
+
+Provenance is a separate additive v4 Bridge SQLite relation keyed by exact
+scope and asset ID; access is granted by ownership **or** an existing link.
+A linked-only scope may have metadata independent of the asset owner's fields.
+The API allows nullable partial edits; caption and origin are coupled.
+Unlink removes visibility where it ends the only link, but does not silently
+erase the scoped metadata. Explicit field erasure leaves no history; SQLite
+backup/restore is the rollback path. User claims, consent codes and dates
+are never authentication, image identity evidence, or a reason to update the
+provider locator. Reject free-text URLs, filesystem paths and unsafe controls;
+do not add provenance to ordinary search results (backward-compatible).
+The v4 repository locks the database transaction before authorizing and merging
+patches, preventing concurrent writers from dropping each other's changes.
+The exact safe reference alphabet, namespace and timestamp precision are in
+docs/19; malformed stored metadata fails closed instead of being echoed.

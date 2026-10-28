@@ -1186,6 +1186,9 @@
               },
               "required": [],
               "additionalProperties": false
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -1227,6 +1230,12 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "asset_id": {
+              "type": "null"
+            },
+            "metadata": {
+              "type": "null"
             }
           },
           "required": [
@@ -1306,6 +1315,9 @@
               },
               "required": [],
               "additionalProperties": false
+            },
+            "error": {
+              "type": "null"
             }
           },
           "required": [
@@ -1347,6 +1359,12 @@
                 "code"
               ],
               "additionalProperties": false
+            },
+            "asset_id": {
+              "type": "null"
+            },
+            "metadata": {
+              "type": "null"
             }
           },
           "required": [

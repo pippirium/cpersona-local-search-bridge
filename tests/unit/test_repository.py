@@ -63,7 +63,7 @@ def link(r: Repository, asset_id: str, memory_ref: str = "mem:1", **scope) -> No
 
 def test_open_creates_schema_and_version(tmp_path):
     conn = open_repository(tmp_path)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1  # per-connection
     conn.close()
 
@@ -92,7 +92,7 @@ def test_schema_too_new_refuses_open(tmp_path):
 
 
 def test_latest_known_version_matches_migrations():
-    assert latest_known_version() == 3
+    assert latest_known_version() == 4
 
 
 # ---- links: idempotence, scope, validation -------------------------------------
@@ -284,7 +284,7 @@ def test_health_reports_real_schema_version(tmp_path):
     conn = open_repository(tmp_path)
     ctx = BridgeContext(config=cfg, provider=FakeProvider(), db=Repository(conn))
     h = bridge_health(ctx)
-    assert h.storage.schema_version == 3
+    assert h.storage.schema_version == 4
     # a downgraded-looking DB is reported verbatim, not clamped
     conn.execute("PRAGMA user_version = 0")
     assert bridge_health(ctx).storage.schema_version == 0
