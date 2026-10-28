@@ -48,7 +48,8 @@ curl -s -X POST -H "Host: 127.0.0.1:18765" -H "Content-Type: application/json" \
 The Bridge NEVER calls folder write endpoints; this step is yours. Keep
 the folder dedicated. Pending resolution compares stored basename, shard,
 folder, kind and size against listing and fresh detail; a full raw recent
-page remains pending (D-23/D-24). No content is fetched to bind.
+page remains pending (D-23/D-24). Owned managed copies are hashed locally
+before binding; the resolver does not return image bytes.
 
 ## 3. MCP host registration
 
@@ -84,25 +85,47 @@ Environment keys (src/bridge/config.py validates all of them at startup):
 | `BRIDGE_MANAGED_ROOT` + `BRIDGE_MANAGED_FOLDER_ID` | managed import opt-in, all-or-nothing; root must be 0700, `managed_folder_id` = the id from step 2 |
 
 `bridge_health` answers `managed_enabled`, `managed_folder_registered`,
-`managed_watch` — the premise is checked live, never assumed.
+`managed_watch` and `managed_root_matches` — the premise is checked live,
+never assumed.
 
 ## 4. Backup / restore
 
-Bridge state = **one directory**: `BRIDGE_DATA_DIR` (`bdata/` SQLite, WAL)
-plus `BRIDGE_MANAGED_ROOT` (content-addressed copies).
+Bridge state consists of `BRIDGE_DATA_DIR/bridge.db` and, when enabled, the
+managed and staging roots. Stop Bridge writers and capture the database and
+roots as one consistent logical snapshot. Use the SQLite online backup API;
+do not copy only the live main DB and ignore its WAL:
 
-- **Backup**: stop the MCP host, then `sqlite3 bdata/app.db "PRAGMA
-  wal_checkpoint(TRUNCATE);" && tar czf bridge-backup.tgz bdata managed`.
-  Copying a running DB without checkpointing is unsupported.
-- **Restore**: extract, point the env at the restored paths, restart the
-  host. `bridge_health` first.
+```sh
+python - <<'PYCODE'
+import contextlib, os, sqlite3
+from pathlib import Path
+source = (Path(os.environ["BRIDGE_DATA_DIR"]) / "bridge.db").resolve()
+if not source.is_file():
+    raise SystemExit("Bridge database not found")
+backup = Path("bridge-backup.sqlite3")  # choose a new, protected destination
+fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+os.close(fd)
+with contextlib.closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as src:
+    with contextlib.closing(sqlite3.connect(backup)) as dst:
+        src.backup(dst)
+PYCODE
+```
+
+Snapshot the configured managed and staging roots separately while writers are
+stopped, keep the matching snapshots together, and include the database backup.
+
+- **Backup**: retain the protected database backup and root snapshots together.
+- **Restore**: stop writers, restore the database backup as `bridge.db` in a
+  clean Bridge data directory and restore the matching roots; point the env at
+  those restored locations, restart, and run `bridge_health` first.
 - **What a restore does NOT fix**: provider file ids may have drifted
   while you were down. Run `audit_assets` (dry-run default) → expected
   `stale`/`missing` findings → decide. Re-link is explicit
   (`unlink_asset` + `link_asset`); the Bridge never re-binds silently
   (D-08) and never deletes your files (docs/08).
-- Managed copies are content-addressed: re-registering the same image
-  reuses the SAME asset without a second write (dedup by SHA-256).
+- Managed copies are content-addressed: a repeat in the same scope and
+  configured provider folder may reuse its asset without a second write. A
+  different scope gets a separate asset ID even when physical bytes are shared.
 - Never restore into or copy from local-search's data dir or CPersona's
   memory DB — those are owned by their apps.
 
@@ -272,6 +295,81 @@ At most five provider pages of 20 are scanned; `partial` reports a limit or an
 unavailable scoped result, not a recall measurement. Call `get_asset`
 separately when the user explicitly requests image display.
 
+
+## IMG-09 — Safe image → index → memory association → later recall
+
+Full isolated E2E acceptance and matrix: [docs/20](../docs/20-img09-three-process-acceptance.md).
+The IMG-09 synthetic run passed with a fake embedder; the historical B-13
+success in docs/16 is a separate earlier run.
+
+**Fresh test installation (not production):** use a new checkout with
+`uv sync`, review each pinned CPersona/local-search revision in docs/16,
+and install CPersona in a separate virtual environment from Bridge.
+Never reuse CPersona's live DB, an existing local-search index, a client's
+existing MCP registration, or a source folder of user images. The test itself
+creates independent temp Bridge DB, CPersona DB, provider DB/index,
+watched-folder, managed-root, staging-root and allowed-selection folder. It
+starts/stops only children it created. Its local-search process uses the
+explicit fake embedder; real search accuracy remains unmeasured here.
+
+Before a real-world workflow, the trusted operator registers and enables
+watching for an empty managed folder, configures the corresponding
+`BRIDGE_MANAGED_FOLDER_ID` and `BRIDGE_MANAGED_ROOT`, and calls
+`bridge_health`. A host that can transmit bounded Base64 invokes
+`ingest_image` with a deliberate user-selected image. A host that cannot
+transmit image bytes must instead use the local `bridge.stage_image` helper
+under an explicitly configured input root, then invoke `import_staged_image`
+with the short-lived opaque staging ID. Do not assume a displayed attachment
+has been forwarded, and never send arbitrary paths to the MCP service.
+
+After the ingest tool returns `pending`, wait for the provider's watched
+folder to index the managed copy; call `resolve_pending_assets` explicitly
+and then `get_ingest_status` to confirm `ready`. The link itself may
+already be created in `pending` once the trusted host has obtained the real
+`mem:N` or `ep:N` from CPersona and the user explicitly approves linking.
+Use `link_registered_asset` and then `list_memory_assets`. CPersona's
+normal `recall` and `reconstruct` do **not** load image bytes. Only the
+explicit `get_asset` tool may return a media block. A candidate discovered
+through `discover_assets` is never auto-linked.
+
+Example (schematic; use a real CPersona reference and actual returned ID):
+
+```json
+{"tool":"link_registered_asset","arguments":{"agent_id":"example","memory_ref":"mem:42","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3"}}
+```
+```json
+{"tool":"list_memory_assets","arguments":{"agent_id":"example","memory_ref":"mem:42"}}
+```
+```json
+{"tool":"get_ingest_status","arguments":{"agent_id":"example","asset_id":"b519a9d4-9f85-469c-b603-c8ce2c6a54c3"}}
+```
+
+On cancellation, never call `link_registered_asset`; unlinked candidates
+stay outside memory results. If indexing is slow, preserve `pending` and
+retry the explicit resolver; do not fabricate ready or change provider IDs.
+If the provider is unavailable, check `bridge_health`, retry safe HTTP reads
+only under their documented bounds, and do not convert provider errors into
+empty search success. On changed content, reindex, rowid reuse or missing
+bytes, fail closed and investigate the specific asset via status/audit rather
+than substituting another image. If a token expires, require a new deliberate
+operator selection; do not bypass expiration. The owner remains allowed to
+review provenance after unlink, while another link-only scope loses access
+when its last link is removed.
+
+For schema upgrade/restore use the **IMG-08 v4** section:
+stop writers, take a consistent online SQLite backup and managed/staging root
+snapshots, and restore the matching set on failure. After rollback, explicitly
+recreate the associations made after the snapshot with user approval rather
+than inventing missing CPersona memory references. No automatic destructive
+cleanup is performed. Keep temp child process logs private; do not commit
+stderr, memory content, Base64, filename, private path or tokens.
+
+Verification commands (the live test requires dedicated executables):
+```sh
+uv run pytest -q
+uv run pytest tests/security -q
+BRIDGE_THREE_PROCESS_CPERSONA_PYTHON=<test-python> BRIDGE_THREE_PROCESS_LOCAL_SEARCH=<test-provider> uv run pytest tests/integration/test_three_process.py -q
+```
 
 ## Explicitly associate an image with a memory
 

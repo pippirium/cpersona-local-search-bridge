@@ -67,12 +67,27 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
     base = f"http://127.0.0.1:{port}"
     watched = tmp_path / "watched"
     managed = tmp_path / "managed"
+    blocked = tmp_path / "blocked"
     watched.mkdir(mode=0o700)
     managed.mkdir(mode=0o700)
+    blocked.mkdir(mode=0o700)
+    staged_input = tmp_path / "operator-selected"
+    staged_root = tmp_path / "staging"
+    staged_input.mkdir(mode=0o700)
+    staged_root.mkdir(mode=0o700)
+    staged_media = _png((10, 180, 50))
+    (staged_input / "synthetic-green.png").write_bytes(staged_media)
     media = _png()
     source = watched / "synthetic-red.png"
     source.write_bytes(media)
-    with (tmp_path / "children.log").open("w+") as logs:
+    unlinked_media = _png((10, 10, 239))
+    unlinked = watched / "synthetic-unlinked-blue.png"
+    unlinked.write_bytes(unlinked_media)
+    forbidden = blocked / "synthetic-forbidden-blue.png"
+    forbidden.write_bytes(_png((10, 10, 238)))
+    bridge_log_path = tmp_path / "bridge-child.log"
+    secrets_seen = []
+    with (tmp_path / "children.log").open("w+") as logs, bridge_log_path.open("w+") as bridge_logs:
         def start():
             return subprocess.Popen(
                 [LS_COMMAND, "serve", "--port", str(port),
@@ -103,13 +118,15 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                     return result.json()["id"]
                 source_folder = folder(watched)
                 managed_folder = folder(managed)
+                blocked_folder = folder(blocked)
                 deadline = time.monotonic() + 30
                 source_id = None
                 while time.monotonic() < deadline:
                     entries = http.get("/api/files/recent", params={"limit": 100}).json()
                     hits = [e for e in entries if e["folder_id"] == source_folder
                             and e["name"] == source.name]
-                    if hits:
+                    names = {(e["folder_id"], e["name"]) for e in entries}
+                    if hits and (source_folder, unlinked.name) in names and (blocked_folder, forbidden.name) in names:
                         source_id = hits[0]["file_id"]
                         break
                     time.sleep(0.1)
@@ -128,15 +145,28 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                         "BRIDGE_DATA_DIR": str(tmp_path / "bridge"),
                         "BRIDGE_PROVIDER_URL": base,
                         "BRIDGE_MANAGED_ROOT": str(managed),
-                        "BRIDGE_MANAGED_FOLDER_ID": str(managed_folder)})
+                        "BRIDGE_MANAGED_FOLDER_ID": str(managed_folder),
+                        "BRIDGE_DISCOVERY_FOLDER_IDS": str(source_folder),
+                        "BRIDGE_STAGING_ROOT": str(staged_root),
+                        "BRIDGE_STAGING_INPUT_ROOT": str(staged_input)})
 
                 async def run():
                     async with stdio_client(cp, errlog=logs) as (cr, cw):
                         async with ClientSession(cr, cw) as memory:
                             await memory.initialize()
-                            async with stdio_client(bridge, errlog=logs) as (br, bw):
+                            async with stdio_client(bridge, errlog=bridge_logs) as (br, bw):
                                 async with ClientSession(br, bw) as assets:
                                     await assets.initialize()
+                                    health = _payload(await assets.call_tool("bridge_health", {}))
+                                    assert health["managed_enabled"]
+                                    assert health["managed_folder_registered"] and health["managed_watch"]
+                                    assert health["managed_root_matches"]
+                                    assert health["storage"]["schema_version"] >= 4
+                                    names = {tool.name for tool in (await assets.list_tools()).tools}
+                                    assert {"ingest_image", "import_staged_image", "get_ingest_status",
+                                            "discover_assets", "search_assets_by_image",
+                                            "link_registered_asset", "get_asset_metadata",
+                                            "set_asset_metadata"} <= names
                                     scope = {"agent_id": "integration", "project_id": "synthetic", "channel": "test"}
                                     saved = _payload(await memory.call_tool("store", {
                                         **scope, "content": "合成テスト 赤い画像 integration probe"}))
@@ -182,22 +212,75 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     assert again["asset_id"] == copied["asset_id"] and again["link_status"] == "ready"
                                     image = await assets.call_tool("get_asset", {**scope, "asset_id": copied["asset_id"]})
                                     assert base64.b64decode(image.content[0].data) == media
-                                    # Explicit new-image link with a ref returned by real CPersona.
+                                    # An unlinked synthetic image must not appear in memory listings.
+                                    # The direct MCP-byte route tests only hosts that can send Base64.
                                     new_media = _png((10, 10, 240))
+                                    secrets_seen.append(base64.b64encode(new_media).decode())
+                                    assert len(new_media) == len(unlinked_media) and new_media != unlinked_media
                                     new = _payload(await assets.call_tool("ingest_image", {
                                         **scope, "image_base64": base64.b64encode(new_media).decode()}))
                                     assert new["ok"] and new["ingest_status"] == "pending"
+                                    status = _payload(await assets.call_tool("get_ingest_status", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert status["ok"] and status["status"] == "pending"
+                                    before_link = _payload(await assets.call_tool("list_memory_assets", {
+                                        **scope, "memory_ref": ref}))
+                                    assert new["asset_id"] not in {entry["asset_id"] for entry in before_link["assets"]}
+                                    wrong_scope = _payload(await assets.call_tool("get_ingest_status", {
+                                        **scope, "agent_id": "other", "asset_id": new["asset_id"]}))
+                                    assert wrong_scope["error"]["code"] == "asset_not_found"
+                                    rejected = _payload(await assets.call_tool("ingest_image", {
+                                        **scope, "image_base64": "%%%"}))
+                                    assert rejected["error"]["code"] == "invalid_request"
+                                    refused = _payload(await assets.call_tool("discover_assets", {
+                                        **scope, "query": "青", "folder_id": blocked_folder}))
+                                    assert refused["error"]["code"] == "asset_not_found"
+                                    discovery = _payload(await assets.call_tool("discover_assets", {
+                                        **scope, "query": "青", "folder_id": source_folder}))
+                                    assert discovery["ok"]
+                                    assert unlinked.name in [entry["label"] for entry in discovery["candidates"]]
+                                    assert forbidden.name not in [entry["label"] for entry in discovery["candidates"]]
+                                    unlinked_search = _payload(await assets.call_tool("search_assets", {
+                                        **scope, "query": "青"}))
+                                    assert unlinked_search["ok"] and new["asset_id"] not in [
+                                        entry["asset_id"] for entry in unlinked_search["results"]]
+                                    assert unlinked.name not in [entry.get("last_seen_name") for entry in unlinked_search["results"]]
+                                    selected = next(entry for entry in discovery["candidates"] if entry["label"] == unlinked.name)
+                                    candidate_link = _payload(await assets.call_tool("link_registered_asset", {
+                                        **scope, "memory_ref": ref, "candidate_token": selected["candidate_token"]}))
+                                    assert candidate_link["ok"] and candidate_link["link_status"] == "ready"
+                                    candidate_image = await assets.call_tool("get_asset", {
+                                        **scope, "asset_id": candidate_link["asset_id"]})
+                                    assert base64.b64decode(candidate_image.content[0].data) == unlinked_media
+                                    candidate_unlink = _payload(await assets.call_tool("unlink_asset", {
+                                        **scope, "memory_ref": ref, "asset_id": candidate_link["asset_id"]}))
+                                    assert candidate_unlink["unlinked"]
+                                    candidate_search = _payload(await assets.call_tool("search_assets", {**scope, "query": "青"}))
+                                    assert candidate_link["asset_id"] not in [entry["asset_id"] for entry in candidate_search["results"]]
+                                    before_fetch = _payload(await assets.call_tool("get_asset", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert before_fetch["error"]["code"] == "asset_not_found"
                                     associated = _payload(await assets.call_tool("link_registered_asset", {
                                         **scope, "memory_ref": ref, "asset_id": new["asset_id"]}))
                                     assert associated["ok"] and associated["link_status"] == "pending"
+                                    # A *later* real CPersona recall stays text-only; the host
+                                    # resolves image references through Bridge in a separate step.
+                                    for name in ("recall", "reconstruct"):
+                                        later = await memory.call_tool(name, {**scope, "query": "integration"})
+                                        assert all(block.type == "text" for block in later.content)
+                                        assert "integration" in json.dumps(_payload(later), ensure_ascii=False)
+                                    invalid_ref = _payload(await assets.call_tool("link_registered_asset", {
+                                        **scope, "memory_ref": "mem:0", "asset_id": new["asset_id"]}))
+                                    assert invalid_ref["error"]["code"] == "invalid_request"
                                     metadata = _payload(await assets.call_tool("set_asset_metadata", {
                                         **scope, "asset_id": new["asset_id"], "metadata_patch": {
-                                            "user_caption": "synthetic blue", "caption_origin": "user",
-                                            "source_kind": "chat_attachment"}}))
-                                    assert metadata["ok"] and metadata["metadata"]["user_caption"] == "synthetic blue"
-                                    denied_metadata = _payload(await assets.call_tool("get_asset_metadata", {
+                                            "user_caption": "synthetic blue fixture",
+                                            "caption_origin": "user", "source_kind": "chat_attachment",
+                                            "consent_record": "explicit_user"}}))
+                                    assert metadata["ok"] and metadata["metadata"]["caption_origin"] == "user"
+                                    metadata_other = _payload(await assets.call_tool("get_asset_metadata", {
                                         **scope, "agent_id": "other", "asset_id": new["asset_id"]}))
-                                    assert denied_metadata["error"]["code"] == "asset_not_found"
+                                    assert metadata_other["error"]["code"] == "asset_not_found"
                                     listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
                                     assert new["asset_id"] in [entry["asset_id"] for entry in listed["assets"]]
                                     deadline = time.monotonic() + 30
@@ -208,6 +291,18 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                         await anyio.sleep(0.1)
                                     else:
                                         pytest.fail("new managed image did not resolve")
+                                    ready = _payload(await assets.call_tool("get_ingest_status", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert ready["ok"] and ready["status"] == "ready" and ready["indexed"]
+                                    # Query searches are metadata-only even though the provider reads bytes internally.
+                                    for query in ({"query_asset_id": new["asset_id"]},
+                                                  {"image_base64": base64.b64encode(new_media).decode()}):
+                                        search_image = await assets.call_tool("search_assets_by_image", {**scope, **query})
+                                        assert all(block.type != "image" for block in search_image.content)
+                                        found = _payload(search_image)
+                                        assert found["ok"]
+                                        assert new["asset_id"] in [entry["asset_id"] for entry in found["results"]]
+                                        assert all("image_base64" not in entry for entry in found["results"])
                                     fetched = await assets.call_tool("get_asset", {**scope, "asset_id": new["asset_id"]})
                                     assert base64.b64decode(fetched.content[0].data) == new_media
                                     removed_new = _payload(await assets.call_tool("unlink_asset", {
@@ -215,6 +310,62 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                     assert removed_new["unlinked"]
                                     listed = _payload(await assets.call_tool("list_memory_assets", {**scope, "memory_ref": ref}))
                                     assert new["asset_id"] not in [entry["asset_id"] for entry in listed["assets"]]
+                                    after_unlink = _payload(await assets.call_tool("search_assets", {**scope, "query": "青"}))
+                                    assert new["asset_id"] not in [entry["asset_id"] for entry in after_unlink["results"]]
+                                    after_image = _payload(await assets.call_tool("search_assets_by_image", {
+                                        **scope, "image_base64": base64.b64encode(new_media).decode()}))
+                                    assert new["asset_id"] not in [entry["asset_id"] for entry in after_image["results"]]
+                                    retained = _payload(await assets.call_tool("get_asset_metadata", {
+                                        **scope, "asset_id": new["asset_id"]}))
+                                    assert retained["ok"] and retained["metadata"] == metadata["metadata"]
+                                    # Alternate host path: an operator stages a synthetic file locally,
+                                    # then only the opaque token enters the MCP tool call.
+                                    command = [sys.executable, "-m", "bridge.stage_image",
+                                               "--agent-id", scope["agent_id"],
+                                               "--project-id", scope["project_id"],
+                                               "--channel", scope["channel"],
+                                               "--relative-path", "synthetic-green.png"]
+                                    stage_env = dict(bridge.env)
+                                    refused_stage = subprocess.run(command, cwd=ROOT, env=stage_env,
+                                        capture_output=True, text=True, timeout=15)
+                                    assert refused_stage.returncode != 0
+                                    staged = subprocess.run([*command, "--confirm"], cwd=ROOT, env=stage_env,
+                                        capture_output=True, text=True, timeout=15)
+                                    assert staged.returncode == 0, "isolated staging helper failed"
+                                    token = json.loads(staged.stdout)["staging_id"]
+                                    secrets_seen.append(token)
+                                    denied_stage = _payload(await assets.call_tool("import_staged_image", {
+                                        **scope, "agent_id": "other", "staging_id": token}))
+                                    assert denied_stage["error"]["code"] == "invalid_request"
+                                    imported = _payload(await assets.call_tool("import_staged_image", {
+                                        **scope, "staging_id": token}))
+                                    assert imported["ok"] and imported["ingest_status"] == "pending"
+                                    imported_again = _payload(await assets.call_tool("import_staged_image", {
+                                        **scope, "staging_id": token}))
+                                    assert imported_again["asset_id"] == imported["asset_id"]
+                                    staged_link = _payload(await assets.call_tool("link_registered_asset", {
+                                        **scope, "memory_ref": ref, "asset_id": imported["asset_id"]}))
+                                    assert staged_link["ok"]
+                                    deadline = time.monotonic() + 30
+                                    while time.monotonic() < deadline:
+                                        status = _payload(await assets.call_tool("get_ingest_status", {
+                                            **scope, "asset_id": imported["asset_id"]}))
+                                        if status["status"] == "ready":
+                                            break
+                                        _payload(await assets.call_tool("resolve_pending_assets", {}))
+                                        await anyio.sleep(0.1)
+                                    else:
+                                        pytest.fail("staged image did not resolve")
+                                    confirmed = await assets.call_tool("get_asset", {
+                                        **scope, "asset_id": imported["asset_id"]})
+                                    assert [c.type for c in confirmed.content] == ["image"]
+                                    assert base64.b64decode(confirmed.content[0].data) == staged_media
+                                    assert (staged_input / "synthetic-green.png").read_bytes() == staged_media
+                                    sensitive_query = "SYNTHETIC_QUERY_SENTINEL_7"
+                                    secrets_seen.append(sensitive_query)
+                                    query_check = _payload(await assets.call_tool("search_assets", {
+                                        **scope, "query": sensitive_query}))
+                                    assert query_check["ok"]
                                     _stop(process)
                                     outage = _payload(await assets.call_tool("get_asset", {**scope, "asset_id": aid}))
                                     assert outage["error"]["code"] == "dependency_unavailable"
@@ -222,6 +373,15 @@ def test_real_three_process_memory_asset_round_trip(tmp_path):
                                         **scope, "memory_ref": ref, "asset_id": aid}))
                                     assert removed["unlinked"] and removed["remaining_links"] == 0
                                     assert source.read_bytes() == media
+                                    assert unlinked.read_bytes() == unlinked_media
+                                    assert forbidden.read_bytes() == _png((10, 10, 238))
                 anyio.run(run)
+                bridge_logs.flush()
+                sanitized_log = bridge_log_path.read_text()
+                assert all(value not in sanitized_log for value in secrets_seen)
+                assert base64.b64encode(media).decode() not in sanitized_log
+                assert "synthetic blue fixture" not in sanitized_log
+                assert unlinked.name not in sanitized_log and source.name not in sanitized_log
+                assert str(watched) not in sanitized_log and str(managed) not in sanitized_log
         finally:
             _stop(process)
