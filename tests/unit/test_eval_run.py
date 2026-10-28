@@ -86,12 +86,13 @@ def test_real_model_provenance_must_be_explicit_and_exact():
 
     expected = "914f7f89142e33e77833254d9c9b90c3cef7303b"
     verify_real_model({"model": {"id": "google/embeddinggemma-2",
-                                 "revision": expected}}, expected)
+                                 "revision": expected, "state": "ready"}}, expected)
     for status in (
         {},
-        {"model": {"id": "google/embeddinggemma-2", "revision": "fake"}},
-        {"model": {"id": "other-model", "revision": expected}},
-        {"model": {"id": "google/embeddinggemma-2", "revision": expected[:8]}},
+        {"model": {"id": "google/embeddinggemma-2", "revision": "fake", "state": "ready"}},
+        {"model": {"id": "other-model", "revision": expected, "state": "ready"}},
+        {"model": {"id": "google/embeddinggemma-2", "revision": expected[:8], "state": "ready"}},
+        {"model": {"id": "google/embeddinggemma-2", "revision": expected, "state": "loading"}},
     ):
         with pytest.raises(ValueError, match="revision"):
             verify_real_model(status, expected)
