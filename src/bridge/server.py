@@ -25,6 +25,7 @@ from bridge.tools_staging import import_staged_image as _staging_impl
 from bridge.tools_discover import DiscoveryResult, DiscoveryState, discover_assets as _discover_impl
 from bridge.tools_image_search import ImageSearchResult, search_assets_by_image as _image_search_impl
 from bridge.tools_registered_link import RegisteredLinkResult, link_registered_asset as _registered_link_impl
+from bridge.tools_metadata import MetadataResult, get_asset_metadata as _get_metadata_impl, set_asset_metadata as _set_metadata_impl
 from bridge.audit import AuditReport, audit as _audit_impl
 from bridge.audit import reconcile as _reconcile_impl
 from bridge.reconcile import ResolveReport, resolve_pending as _resolve_impl
@@ -244,6 +245,30 @@ def create_server(ctx: BridgeContext) -> MCPServer:
             agent_id=agent_id, memory_ref=memory_ref, asset_id=asset_id, candidate_token=candidate_token,
             project_id=project_id, channel=channel, source_instance_id=source_instance_id,
             client_request_id=client_request_id)
+
+    @server.tool(
+        name="get_asset_metadata",
+        description="Read owner- or link-scoped user-provided image provenance; returns no image bytes.",
+    )
+    def _get_asset_metadata(agent_id: str, asset_id: str, project_id: str = "",
+                            channel: str = "", source_instance_id: str = "") -> MetadataResult:
+        if ctx.db is None:
+            return MetadataResult(ok=False, error=error_result("storage_error")["error"])
+        return _get_metadata_impl(repo=ctx.db, agent_id=agent_id, asset_id=asset_id,
+            project_id=project_id, channel=channel, source_instance_id=source_instance_id)
+
+    @server.tool(
+        name="set_asset_metadata",
+        description="Patch explicitly user-provided provenance in this exact asset scope. Null clears fields.",
+    )
+    def _set_asset_metadata(agent_id: str, asset_id: str, metadata_patch: dict,
+                            project_id: str = "", channel: str = "",
+                            source_instance_id: str = "") -> MetadataResult:
+        if ctx.db is None:
+            return MetadataResult(ok=False, error=error_result("storage_error")["error"])
+        return _set_metadata_impl(repo=ctx.db, agent_id=agent_id, asset_id=asset_id,
+            metadata_patch=metadata_patch, project_id=project_id, channel=channel,
+            source_instance_id=source_instance_id)
 
     # ---- link tools (B-07) ----------------------------------------------------
 

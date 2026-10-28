@@ -57,7 +57,7 @@ def test_health_ok(ctx):
     assert (p.reachable, p.provider_version, p.generation, p.model_state,
             p.index_mismatch, p.checked) == (True, "0.1.1-fake", 1, "ready", None, True)
     assert h.warnings == []
-    assert h.schema_version == 3
+    assert h.schema_version == 4
 
 
 def test_health_provider_down(ctx):
@@ -147,7 +147,7 @@ async def test_host_lists_and_calls_health_tool(ctx):
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"bridge_health", "link_asset", "unlink_asset",
                     "search_assets", "list_memory_assets", "get_asset",
-                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image", "discover_assets", "search_assets_by_image", "link_registered_asset"}
+                    "register_asset", "resolve_pending_assets", "audit_assets", "ingest_image", "get_ingest_status", "import_staged_image", "discover_assets", "search_assets_by_image", "link_registered_asset", "set_asset_metadata", "get_asset_metadata"}
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
         assert payload["bridge_version"] == "0.0.0"
@@ -187,7 +187,7 @@ async def test_health_reports_attached_repository_schema_version(tmp_path):
     async with connected_client(server) as session:
         result = await session.call_tool("bridge_health", {})
         payload = result.structured_content or {}
-        assert payload["storage"]["schema_version"] == 3
+        assert payload["storage"]["schema_version"] == 4
 
 
 @pytest.mark.anyio

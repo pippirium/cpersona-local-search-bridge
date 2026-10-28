@@ -968,6 +968,91 @@ class Repository:
             "media_type": row[2], "size_bytes": row[3],
         }
 
+    # ---- IMG-08: scope-specific, user-authored provenance --------------------
+
+    def _metadata_visible_locked(self, scope: tuple[str, str, str, str], asset_id: str) -> bool:
+        """Executed under the same lock / transaction as metadata access."""
+        return self._conn.execute(
+            "SELECT (EXISTS(SELECT 1 FROM asset_owners WHERE asset_id=?"
+            " AND source_instance_id=? AND agent_id=? AND project_id=? AND channel=?)"
+            " OR EXISTS(SELECT 1 FROM asset_links WHERE asset_id=?"
+            " AND source_instance_id=? AND agent_id=? AND project_id=? AND channel=?))",
+            (asset_id, *scope, asset_id, *scope),
+        ).fetchone()[0] == 1
+
+    def _read_metadata_locked(self, scope: tuple[str, str, str, str], asset_id: str) -> dict:
+        columns = ("user_caption", "caption_origin", "source_kind", "captured_at",
+                   "recorded_at", "source_message_ref", "consent_record")
+        row = self._conn.execute(
+            "SELECT " + ", ".join(columns) + " FROM asset_metadata"
+            " WHERE source_instance_id=? AND agent_id=? AND project_id=?"
+            " AND channel=? AND asset_id=?", (*scope, asset_id),
+        ).fetchone()
+        result = {name: value for name, value in zip(columns, row) if value is not None} if row else {}
+        if result:
+            from bridge.errors import BridgeError
+            from bridge.tools_metadata import validate_patch
+            try:
+                validate_patch(result)
+            except BridgeError:
+                raise StorageError("invalid stored metadata") from None
+            if bool(result.get("user_caption")) != bool(result.get("caption_origin")):
+                raise StorageError("invalid stored metadata")
+        return result
+
+    def read_asset_metadata(self, *, scope: tuple[str, str, str, str], asset_id: str) -> dict:
+        with self.lock:
+            scope = normalize_scope(*scope)
+            try:
+                self._conn.execute("BEGIN")
+                if not ASSET_ID_RE.fullmatch(asset_id) or not self._metadata_visible_locked(scope, asset_id):
+                    raise AssetNotFound("asset not visible")
+                result = self._read_metadata_locked(scope, asset_id)
+                self._conn.commit()
+                return result
+            except BaseException:
+                self._conn.rollback()
+                raise
+
+    def patch_asset_metadata(self, *, scope: tuple[str, str, str, str],
+                             asset_id: str, patch: dict) -> dict:
+        with self.lock:
+            scope = normalize_scope(*scope)
+            from bridge.tools_metadata import validate_patch
+            columns = ("user_caption", "caption_origin", "source_kind", "captured_at",
+                       "recorded_at", "source_message_ref", "consent_record")
+            patch = validate_patch(patch)
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                if not ASSET_ID_RE.fullmatch(asset_id) or not self._metadata_visible_locked(scope, asset_id):
+                    raise AssetNotFound("asset not visible")
+                merged = self._read_metadata_locked(scope, asset_id)
+                for key, value in patch.items():
+                    if value is None:
+                        merged.pop(key, None)
+                    else:
+                        merged[key] = value
+                if "user_caption" in patch and patch["user_caption"] is None:
+                    merged.pop("caption_origin", None)
+                if bool(merged.get("user_caption")) != bool(merged.get("caption_origin")):
+                    raise RequestConflict("caption requires origin")
+                self._conn.execute(
+                    "DELETE FROM asset_metadata WHERE source_instance_id=? AND agent_id=?"
+                    " AND project_id=? AND channel=? AND asset_id=?", (*scope, asset_id),
+                )
+                if merged:
+                    self._conn.execute(
+                        "INSERT INTO asset_metadata (source_instance_id, agent_id, project_id,"
+                        " channel, asset_id, " + ", ".join(columns) + ", updated_at)"
+                        " VALUES (" + ", ".join("?" for _ in range(13)) + ")",
+                        (*scope, asset_id, *(merged.get(key) for key in columns), utc_now()),
+                    )
+                self._conn.commit()
+                return merged
+            except BaseException:
+                self._conn.rollback()
+                raise
+
     def locator_status(self, asset_id: str,
                        provider_instance_id: str) -> str | None:
         with self.lock:

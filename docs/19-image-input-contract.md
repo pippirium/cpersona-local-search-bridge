@@ -208,11 +208,16 @@ Metadata is scoped to an owner or existing linked scope and never exposes
 another scope. Allowed nullable fields: `user_caption` (max 1000 UTF-8 bytes),
 `caption_origin` (`user` or `external_source`), `source_kind`
 (`chat_attachment`, `local_selection`, `managed_import`, `external_source`),
-`captured_at`, `recorded_at` (RFC 3339 timestamps with explicit timezone),
-`source_message_ref` (opaque safe identifier, max 128 bytes), and
+`captured_at`, `recorded_at` (RFC 3339 timestamps with explicit timezone and
+at most six fractional digits), `source_message_ref` (opaque safe identifier,
+max 128 bytes), and
 `consent_record` (one of `explicit_user`, `operator_confirmed`). Omitted means
 unchanged; null removes a field; unknown fields fail the entire patch. Reject
-control characters, URLs and filesystem paths in free-text fields. Caption
+control and Unicode format characters, URL-like domains or schemes, path
+separators, leading tildes and `..` in free-text fields. Opaque message refs
+allow ASCII letters, digits, `.`, `_`, `-`, and optionally one of the safe
+namespaces `opaque:`, `msg:`, `message:`, `mem:` or `ep:`; they cannot start
+with a dot or look like a URL or path. Caption
 requires its origin; clearing the caption also clears the origin. These are
 user-supplied labels, not identity, proof of consent or authoritative EXIF.
 No model-generated caption, OCR or search indexing of captions is introduced.
